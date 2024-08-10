@@ -61,16 +61,46 @@ internal extension ScanResult {
     }
 }
 
+internal extension BluetoothGatt {
+    var peripheral: CBPeripheral {
+        return CBPeripheral(gatt: self)
+    }
+}
+
 open class CBPeripheral: CBPeer {
-    private var scanResult: ScanResult
+    private var _name: String?
     private let stateWatcher = PeripheralStateWatcher { self.state = $0 }
 
+    internal let device: BluetoothDevice?
+
+    /// Enables us to connect to this peripheral with the underlying Kotlin API
+    internal let gatt: BluetoothGatt?
+
     internal init(result: ScanResult) {
-        self.scanResult = result
+        self._name = result?.scanRecord.deviceName
+        self.device = result?.device
+
+        // Although we can get the `BluetoothDevice` from the `ScanResult`
+        // we choose not to because in CoreBluetooth we some APIs aren't
+        // available until we connect to the device, e.g. `discoverServices`
+        self.gatt = nil
     }
 
-    weak open var delegate: (any CBPeripheralDelegate)?
-    open var name: String? { scanResult?.scanRecord.deviceName }
+    internal init(gatt: BluetoothGatt) {
+        self._name = gatt.device.name
+        self.device = gatt.device
+        self.gatt = gatt
+    }
+
+    open var delegate: (any CBPeripheralDelegate)? {
+        get {
+            gattDelegate.delegate
+        } set {
+            gattDelegate.delegate = newValue
+        }
+    }
+
+    open var name: String? { _name }
     open private(set) var state: CBPeripheralState = CBPeripheralState.disconnected
 
     @available(*, unavailable)
@@ -85,8 +115,14 @@ open class CBPeripheral: CBPeer {
     @available(*, unavailable)
     open func readRSSI() {}
 
-    @available(*, unavailable)
-    open func discoverServices(_ serviceUUIDs: [CBUUID]?) {}
+    open func discoverServices(_ serviceUUIDs: [CBUUID]?) {
+        guard hasPermission(android.Manifest.permission.BLUETOOTH) else {
+            logger.debug("CBPeripheral.discoverService: Missing permissions")
+        }
+
+        // TODO: Filter services in callback
+        gatt?.discoverServices();
+    }
 
     @available(*, unavailable)
     open func discoverIncludedServices(_ includedServiceUUIDs: [CBUUID]?, for service: CBService) {}
@@ -149,10 +185,10 @@ open class CBPeripheral: CBPeer {
 }
 
 public protocol CBPeripheralDelegate : NSObjectProtocol {
-    optional func peripheralDidUpdateName(_ peripheral: CBPeripheral)
-    optional func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService])
-    optional func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: (any Error)?)
-    optional func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?)
+    func peripheralDidUpdateName(_ peripheral: CBPeripheral)
+    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService])
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: (any Error)?)
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?)
 
     #if !SKIP
     optional func peripheral(_ peripheral: CBPeripheral, didDiscoverIncludedServicesFor service: CBService, error: (any Error)?)
@@ -164,9 +200,20 @@ public protocol CBPeripheralDelegate : NSObjectProtocol {
     optional func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: (any Error)?)
     #endif
 
-    optional func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?)
-    optional func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral)
-    optional func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?)
+    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral)
+    func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
+}
+
+public extension CBPeripheralDelegate {
+    func peripheralDidUpdateName(_ peripheral: CBPeripheral) {}
+    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {}
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: (any Error)?) {}
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {}
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?) {}
+    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {}
+    func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?) {}
 }
 
 #endif

@@ -1,7 +1,14 @@
 import Foundation
 
 #if SKIP
-import android.content.__
+import androidx.__
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.__
+import android.Manifest
+import android.app.__
 import android.content.pm.__
 import android.bluetooth.__
 import android.bluetooth.le.__
@@ -11,18 +18,17 @@ import CoreBluetooth
 
 #if SKIP
 
-// MARK: RECEIVERS
-private class FoundDeviceReceiver {
-    init(completion: (BluetoothDevice))
-}
-
 public enum CBConnectionEvent: Int, @unchecked Sendable {
     case peerDisconnected = 0
     case peerConnected = 1
 }
 
 open class CBCentralManager: CBManager {
-    private let stateReceiver: BluetoothManagerStateReceiver
+    private let scanDelegate = BleScanCallback(central: self)
+
+    private var scanner: BluetoothLeScanner? {
+        adapter?.getBluetoothLeScanner()
+    }
 
     public var delegate: (any CBCentralManagerDelegate)? {
         didSet {
@@ -32,36 +38,41 @@ open class CBCentralManager: CBManager {
 
     public var isScanning: Bool { adapter?.isDiscovering() ?? false }
 
-    public init() {
-        self.stateReceiver = BluetoothManagerStateReceiver {
+    public override init() {
+        super.init()
+        stateChangedHandler = {
             delegate?.centralManagerDidUpdateState(self)
         }
-        let filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-        let context = ProcessInfo.processInfo.androidContext
-        context.registerReceiver(stateReceiver, filter)
-    }
-
-    deinit {
-        context.unregisterReceiver(stateReceiver)
     }
 
     public var state: CBManagerState {
         switch (adapter?.getState()) {
-        case (BluetoothAdapter.STATE_ON):
+        case BluetoothAdapter.STATE_ON:
             return CBManagerState.poweredOn
         default:
             return CBManagerState.poweredOff
         }
     }
 
+    open func scanForPeripherals(withServices serviceUUIDs: [CBUUID]?, options: [String : Any]? = nil) {
+        guard hasPermission(android.Manifest.permission.BLUETOOTH_SCAN) else {
+            logger.error("CBCentralManager.scanForPeripherals: Missing BLUETOOTH_SCAN permission.")
+            return
+        }
+
+        // TODO: Use function arguments in scanning
+        scanner?.startScan(scanDelegate)
+        logger.info("CBCentralManager.scanForPeripherals: Starting Scan")
+    }
+
     public func stopScan() {
-        if (!hasPermission(permission: android.Manifest.permission.BLUETOOTH_SCAN)) {
-            logger.error("CentralManager.stopScan: Permission error")
+        guard hasPermission(android.Manifest.permission.BLUETOOTH_SCAN) else {
+            logger.error("CBCentralManager.scanForPeripherals: Missing BLUETOOTH_SCAN permission")
             return
         }
 
         logger.info("CentralManager.stopScan: Stopping Scan")
-        adapter?.cancelDiscovery()
+        scanner?.stopScan(scanDelegate)
     }
 
 #if !SKIP
@@ -79,17 +90,34 @@ open class CBCentralManager: CBManager {
 
 #endif
 
-    private class BluetoothManagerStateReceiver: BroadcastReceiver {
-        private var completion: () -> Void
-        init(completion: @escaping () -> Void) {
-            self.completion = completion
+    // MARK: NATIVE ANDROID AUXILIARY LOGIC
+
+    private struct BleScanCallback: ScanCallback {
+        private let central: CBCentralManager
+        var delegate: CBCentralManagerDelegate?
+
+        init(central: CBCentralManager) {
+            self.central = central
         }
 
-        override func onReceive(context: Context?, intent: Intent?) {
-            if (BluetoothAdapter.ACTION_STATE_CHANGED == intent?.action) {
-                let state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                completion()
+        override func onScanResult(callbackType: Int, result: ScanResult) {
+            super.onScanResult(callbackType, result)
+            logger.debug("BleScanCallback.onScanResult: \(result.device.name) - \(result.device.address)")
+
+            delegate?.centralManager(central: central, didDiscover: result.toPeripheral(), advertisementData: result.advertisementData, rssi: NSNumber(value: result.rssi))
+        }
+
+        @available(*, unavailable)
+        override func onBatchScanResults(results: List<ScanResult>) {
+            super.onBatchScanResults(results)
+            for result in results {
+                logger.debug("BleScanCallback.onBatchScanResults: \(result.device.name) - \(result.device.address)")
             }
+        }
+
+        override func onScanFailed(errorCode: Int) {
+            super.onScanFailed(errorCode)
+            logger.warning("BleScanCallback.onScanFailed: Scan failed with error: \(errorCode)")
         }
     }
 }
@@ -109,16 +137,32 @@ extension CBCentralManager {
 public protocol CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager)
 
-    #if !SKIP
-    optional func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any])
-    optional func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber)
-    optional func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral)
-    optional func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: (any Error)?)
-    optional func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?)
-    optional func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, timestamp: CFAbsoluteTime, isReconnecting: Bool, error: (any Error)?)
-    optional func centralManager(_ central: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent, for peripheral: CBPeripheral)
-    optional func centralManager(_ central: CBCentralManager, didUpdateANCSAuthorizationFor peripheral: CBPeripheral)
-    #endif
+#if !SKIP
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any])
+#endif
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber)
+
+#if !SKIP
+    // SKIP DECLARE: fun centralManagerdidConnect(central: CBCentralManager, peripheral: CBPeripheral)
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral)
+
+    // SKIP DECLARE: fun centralManagerdidFailToDisconnect(central: CBCentralManager, peripheral: CBPeripheral, error: (any Error)?)
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: (any Error)?)
+
+    // SKIP DECLARE: fun centralManagerdidDisconnectPeripheral(central: CBCentralManager, peripheral: CBPeripheral, error: (any Error)?)
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?)
+#endif
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, timestamp: CFAbsoluteTime, isReconnecting: Bool, error: (any Error)?)
+    func centralManager(_ central: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent, for peripheral: CBPeripheral)
+    func centralManager(_ central: CBCentralManager, didUpdateANCSAuthorizationFor peripheral: CBPeripheral)
+}
+
+public extension CBCentralManagerDelegate {
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) { return }
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, timestamp: CFAbsoluteTime, isReconnecting: Bool, error: (any Error)?) { return }
+    func centralManager(_ central: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent, for peripheral: CBPeripheral) { return }
+    func centralManager(_ central: CBCentralManager, didUpdateANCSAuthorizationFor peripheral: CBPeripheral) { return }
 }
 
 #endif
