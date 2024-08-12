@@ -25,14 +25,18 @@ public enum CBConnectionEvent: Int, @unchecked Sendable {
 
 open class CBCentralManager: CBManager {
     private let scanDelegate = BleScanCallback(central: self)
+    private let gattDelegate = BleGattCallback(central: self)
 
     private var scanner: BluetoothLeScanner? {
         adapter?.getBluetoothLeScanner()
     }
 
     public var delegate: (any CBCentralManagerDelegate)? {
-        didSet {
-            delegate?.centralManagerDidUpdateState(self)
+        get {
+            gattDelegate.delegate
+        } set {
+            scanDelegate.delegate = newValue
+            gattDelegate.delegate = newValue
         }
     }
 
@@ -84,7 +88,16 @@ open class CBCentralManager: CBManager {
     open func retrievePeripherals(withIdentifiers identifiers: [UUID]) -> [CBPeripheral]
     open func retrieveConnectedPeripherals(withServices serviceUUIDs: [CBUUID]) -> [CBPeripheral]
     open func scanForPeripherals(withServices serviceUUIDs: [CBUUID]?, options: [String : Any]? = nil)
-    open func connect(_ peripheral: CBPeripheral, options: [String : Any]? = nil)
+#endif
+    open func connect(_ peripheral: CBPeripheral, options: [String : Any]? = nil) {
+        guard hasPermission(android.Manifest.permission.BLUETOOTH_CONNECT) else {
+            logger.error("CBCentralManager.connect: Missing BLUETOOTH_CONNECT permission.")
+            return
+        }
+
+        peripheral.device?.connectGatt(context, true, gattDelegate)
+    }
+#if !SKIP
     open func cancelPeripheralConnection(_ peripheral: CBPeripheral)
     open func registerForConnectionEvents(options: [CBConnectionEventMatchingOption : Any]? = nil)
 
@@ -94,7 +107,11 @@ open class CBCentralManager: CBManager {
 
     private struct BleScanCallback: ScanCallback {
         private let central: CBCentralManager
-        var delegate: CBCentralManagerDelegate?
+        var delegate: CBCentralManagerDelegate? {
+            didSet {
+                delegate?.centralManagerDidUpdateState(central)
+            }
+        }
 
         init(central: CBCentralManager) {
             self.central = central
@@ -118,6 +135,27 @@ open class CBCentralManager: CBManager {
         override func onScanFailed(errorCode: Int) {
             super.onScanFailed(errorCode)
             logger.warning("BleScanCallback.onScanFailed: Scan failed with error: \(errorCode)")
+        }
+    }
+
+    /// Handles behavior for calling `CBCentralManagerDelegate` callbacks after a connection has been established
+    private struct BleGattCallback: BluetoothGattCallback {
+        private let central: CBCentralManager
+        var delegate: CBCentralManagerDelegate?
+
+        init(central: CBCentralManager) {
+            self.central = central
+        }
+
+        override func onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            super.onConnectionStateChange(gatt, status, newState)
+            if status == BluetoothGatt.GATT_SUCCESS {
+                if newState == BluetoothProfile.STATE_CONNECTED {
+                    delegate?.centralManagerDidConnect(central: central, peripheral: gatt.peripheral)
+                }
+            } else {
+                logger.debug("GattCallback.onConnectionStateChange: state is \(status)")
+            }
         }
     }
 }

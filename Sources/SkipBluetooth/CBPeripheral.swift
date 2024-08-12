@@ -3,6 +3,7 @@ import Foundation
 #if SKIP
 import android.bluetooth.le.__
 import android.bluetooth.__
+import android.bluetooth.BluetoothGattCallback
 
 public enum CBPeripheralState : Int, @unchecked Sendable {
     case disconnected = 0
@@ -70,6 +71,7 @@ internal extension BluetoothGatt {
 open class CBPeripheral: CBPeer {
     private var _name: String?
     private let stateWatcher = PeripheralStateWatcher { self.state = $0 }
+    private let gattDelegate = BleGattCallback(peripheral: self)
 
     internal let device: BluetoothDevice?
 
@@ -99,8 +101,6 @@ open class CBPeripheral: CBPeer {
             gattDelegate.delegate = newValue
         }
     }
-
-    open var name: String? { _name }
     open private(set) var state: CBPeripheralState = CBPeripheralState.disconnected
 
     @available(*, unavailable)
@@ -180,7 +180,42 @@ open class CBPeripheral: CBPeer {
                 break
             }
         }
+    }
 
+    private struct BleGattCallback: BluetoothGattCallback {
+        private let peripheral: CBPeripheral
+        var delegate: CBPeripheralDelegate? {
+            didSet {
+                delegate = newValue
+            }
+        }
+
+        init(_ peripheral: CBPeripheral) {
+            self.peripheral = peripheral
+        }
+
+        override func onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            super.onServicesDiscovered(gatt, status)
+
+            if status != BluetoothGatt.GATT_SUCCESS {
+                delegate?.peripheral(peripheral: peripheral, didDiscoverServices: nil)
+            } else {
+                let error = NSError(domain: "SkipBluetooth", code: status, userInfo: nil)
+                delegate?.peripheral(peripheral: peripheral, didDiscoverServices: error)
+            }
+        }
+
+        override func onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int ) {
+            super.onCharacteristicRead(gatt, characteristic, value, status)
+        }
+
+        override func onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+        }
+        
+        override func onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            super.onCharacteristicChanged(gatt, characteristic, value)
+        }
     }
 }
 
