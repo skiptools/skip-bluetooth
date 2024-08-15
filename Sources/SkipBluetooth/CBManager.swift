@@ -35,10 +35,6 @@ public class CBManager {
         context.registerReceiver(stateChangedReceiver, filter)
     }
 
-    internal func hasPermission(_ permission: String) -> Bool {
-        return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
-    }
-
     private class StateChangedReceiver: BroadcastReceiver {
         private var completion: () -> Void
         init(completion: @escaping () -> Void) {

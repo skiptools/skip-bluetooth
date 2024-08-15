@@ -32,4 +32,10 @@ public func askForBluetoothPermissions() {
         requestPermissionLauncher.launch(permissions)
     }
 }
+
+/// Checks if the given permission is granted
+internal func hasPermission(_ permission: String) -> Bool {
+    let context = ProcessInfo.processInfo.androidContext
+    return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+}
 #endif
