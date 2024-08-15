@@ -101,6 +101,8 @@ open class CBPeripheral: CBPeer {
             gattDelegate.delegate = newValue
         }
     }
+
+    open var name: String? { _name }
     open private(set) var state: CBPeripheralState = CBPeripheralState.disconnected
 
     @available(*, unavailable)

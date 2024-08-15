@@ -1,6 +1,8 @@
 import Foundation
 
 #if SKIP
+import android.os.ParcelUuid
+
 public let CBUUIDCharacteristicExtendedPropertiesString: String = "2900"
 public let CBUUIDCharacteristicUserDescriptionString: String = "2901"
 public let CBUUIDClientCharacteristicConfigurationString: String = "2902"
@@ -39,6 +41,12 @@ open class CBUUID: NSObject {
 
     public init(nsuuid: UUID) {
         self.uuid = nsuuid
+    }
+}
+
+extension CBUUID: KotlinConverting<ParcelUuid> {
+    public override func kotlin(nocopy: Bool = false) -> ParcelUuid {
+        return ParcelUuid(uuid.kotlin())
     }
 }
 

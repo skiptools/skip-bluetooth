@@ -54,17 +54,69 @@ public class CBPeripheralManager: CBManager {
             return
         }
 
-        let settings = AdvertiseSettings.Builder()
+        let settingsBuilder = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+            .setDiscoverable(true)
             .setConnectable(true)
             .setTimeout(0)
-            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-            .build()
 
-        let advertiseData = AdvertiseData.Builder()
+        let advertiseDataBuilder = AdvertiseData.Builder()
             .setIncludeDeviceName(true)
-            .build()
 
+        /* NOTE: Apple's CoreBluetooth API only allows you to configure two keys:
+         * - CBAdvertisementDataLocalNameKey
+         * - CBAdvertisementDataServiceUUIDsKey
+
+         This implementation extends that capability so Apple devices can *receive*
+         in-depth information from Android devices despite not being able to transmit it.
+         */
+        for (key, value) in advertisementData ?? [:] {
+
+            switch key {
+            case CBAdvertisementDataLocalNameKey:
+                if let localName = value as? String {
+                    adapter?.setName(localName)
+                }
+            case CBAdvertisementDataTxPowerLevelKey:
+                if let txPowerLevel = value as? NSNumber {
+                    advertiseDataBuilder.setIncludeTxPowerLevel(true)
+                }
+            case CBAdvertisementDataServiceUUIDsKey:
+                if let serviceUUIDs = value as? [CBUUID] {
+                    for uuid in serviceUUIDs {
+                        advertiseDataBuilder.addServiceUuid(uuid.kotlin())
+                    }
+                }
+            case CBAdvertisementDataServiceDataKey:
+                // TODO: Implement - check out https://developer.android.com/reference/android/bluetooth/le/AdvertiseData.Builder#addServiceData(android.os.ParcelUuid,%20byte[])
+                break
+            case CBAdvertisementDataManufacturerDataKey:
+                // TODO: Implement -- check out https://developer.android.com/reference/android/bluetooth/le/AdvertiseData.Builder#addManufacturerData(int,%20byte[])
+                break
+            case CBAdvertisementDataOverflowServiceUUIDsKey:
+                // TODO: Implement
+                break
+            case CBAdvertisementDataIsConnectable:
+                if let isConnectable = value as? NSNumber {
+                    settingsBuilder.setConnectable(isConnectable.intValue != 0)
+                }
+            case CBAdvertisementDataSolicitedServiceUUIDsKey:
+                if let solicitedServiceUUIDs = value as? [CBUUID] {
+                    for uuid in solicitedServiceUUIDs {
+                        advertiseDataBuilder.addServiceSolicitationUuid(uuid.kotlin())
+                    }
+                }
+            default:
+                logger.warning("CBPeripheralManager.startAdvertising: Unknown key: $key")
+                break
+            }
+        }
+
+        let settings = settingsBuilder.build()
+        let advertiseData = advertiseDataBuilder.build()
+
+        logger.log("CBPeripheralManager.startAdvertising: Begin advertising")
         advertiser?.startAdvertising(settings, advertiseData, advertiseDelegate)
     }
 
