@@ -180,27 +180,26 @@ public protocol CBCentralManagerDelegate {
 #endif
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber)
 
-#if !SKIP
-    // SKIP DECLARE: fun centralManagerdidConnect(central: CBCentralManager, peripheral: CBPeripheral)
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral)
+    // SKIP INSERT: fun centralManagerDidConnect(central: CBCentralManager, peripheral: CBPeripheral) { return }
 
-    // SKIP DECLARE: fun centralManagerdidFailToDisconnect(central: CBCentralManager, peripheral: CBPeripheral, error: (any Error)?)
+#if !SKIP
+    // SKIP DECLARE: fun centralManagerDidFailToDisconnect(central: CBCentralManager, peripheral: CBPeripheral, error: (any Error)?)
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: (any Error)?)
 
-    // SKIP DECLARE: fun centralManagerdidDisconnectPeripheral(central: CBCentralManager, peripheral: CBPeripheral, error: (any Error)?)
+    // SKIP DECLARE: fun centralManagerDidDisconnectPeripheral(central: CBCentralManager, peripheral: CBPeripheral, error: (any Error)?)
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: (any Error)?)
 #endif
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, timestamp: CFAbsoluteTime, isReconnecting: Bool, error: (any Error)?)
     func centralManager(_ central: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent, for peripheral: CBPeripheral)
-    func centralManager(_ central: CBCentralManager, didUpdateANCSAuthorizationFor peripheral: CBPeripheral)
+    
+    // SKIP INSERT: fun centralManagerDidUpdateANCSAuthorizationFor(central: CBCentralManager, peripheral: CBPeripheral) { return }
 }
 
 public extension CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) { return }
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, timestamp: CFAbsoluteTime, isReconnecting: Bool, error: (any Error)?) { return }
     func centralManager(_ central: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent, for peripheral: CBPeripheral) { return }
-    func centralManager(_ central: CBCentralManager, didUpdateANCSAuthorizationFor peripheral: CBPeripheral) { return }
 }
 
 #endif
