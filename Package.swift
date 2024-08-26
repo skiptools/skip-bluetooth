@@ -19,9 +19,9 @@ let package = Package(
         .library(name: "SkipBluetooth", targets: ["SkipBluetooth"]),
     ],
     dependencies: [
-        .package(url: "https://source.skip.tools/skip.git", from: "0.8.55"),
-        .package(url: "https://source.skip.tools/skip-foundation.git", from: "0.0.0"),
-        .package(url: "https://source.skip.tools/skip-ui.git", from: "0.12.3")
+        .package(url: "https://source.skip.tools/skip.git", from: "1.0.4"),
+        .package(url: "https://source.skip.tools/skip-foundation.git", from: "1.1.0"),
+        .package(url: "https://source.skip.tools/skip-ui.git", from: "1.4.4")
     ],
     targets: [
         .target(

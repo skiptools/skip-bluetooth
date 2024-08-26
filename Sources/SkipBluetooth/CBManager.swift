@@ -45,6 +45,10 @@ public class CBManager {
             if (BluetoothAdapter.ACTION_STATE_CHANGED == intent?.action) {
                 let state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                 completion()
+                break
+            default:
+                logger.error("StateChangedReceiver: Unknown intent action: \(action ?? "nil")")
+                break
             }
         }
     }
