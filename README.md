@@ -83,7 +83,7 @@ and these to your AndroidManifest.xml
 </manifest>
 ```
 
-> [! IMPORTANT]
+> [!IMPORTANT]
 > You must request runtime permissions in an `#IF SKIP` block to prevent your app from crashing
 
 Before using any Bluetooth API's, you must request user permissions **in the body of the view or function**
