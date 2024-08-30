@@ -21,7 +21,6 @@ let package = Package(
     dependencies: [
         .package(url: "https://source.skip.tools/skip.git", from: "1.0.4"),
         .package(url: "https://source.skip.tools/skip-foundation.git", from: "1.1.0"),
-        .package(url: "https://source.skip.tools/skip-ui.git", from: "1.4.4")
     ],
     targets: [
         .target(
@@ -31,10 +30,6 @@ let package = Package(
                     name: "SkipFoundation",
                     package: "skip-foundation"
                 ),
-                .product(
-                    name: "SkipUI",
-                    package: "skip-ui"
-                )
             ]
             ),
             resources: [.process("Resources")],
