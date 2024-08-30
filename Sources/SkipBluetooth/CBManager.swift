@@ -14,7 +14,7 @@ public class CBManager {
     private let stateChangedReceiver: StateChangedReceiver
     internal var stateChangedHandler: (() -> Void)?
 
-    private var bluetoothManager: BluetoothManager? {
+    internal var bluetoothManager: BluetoothManager? {
         context.getSystemService(BluetoothManager.self.java)
     }
 
@@ -22,8 +22,13 @@ public class CBManager {
         return bluetoothManager?.getAdapter()
     }
 
-    deinit {
-        context.unregisterReceiver(stateChangedReceiver)
+    public var state: CBManagerState {
+        switch (adapter?.getState()) {
+        case BluetoothAdapter.STATE_ON:
+            return CBManagerState.poweredOn
+        default:
+            return CBManagerState.poweredOff
+        }
     }
 
     internal init() {
@@ -35,6 +40,10 @@ public class CBManager {
         context.registerReceiver(stateChangedReceiver, filter)
     }
 
+    deinit {
+        context.unregisterReceiver(stateChangedReceiver)
+    }
+
     private class StateChangedReceiver: BroadcastReceiver {
         private var completion: () -> Void
         init(completion: @escaping () -> Void) {
@@ -42,9 +51,14 @@ public class CBManager {
         }
 
         override func onReceive(context: Context?, intent: Intent?) {
-            if (BluetoothAdapter.ACTION_STATE_CHANGED == intent?.action) {
-                let state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                completion()
+            let action = intent?.action
+            switch (action) {
+            case BluetoothAdapter.ACTION_STATE_CHANGED:
+                if let state = intent?.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR) {
+                    completion()
+                } else {
+                    logger.error("CBManager.StateChangedReceiver.onReceive: Unknown state")
+                }
                 break
             default:
                 logger.error("StateChangedReceiver: Unknown intent action: \(action ?? "nil")")

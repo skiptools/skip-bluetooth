@@ -1,13 +1,19 @@
 import Foundation
 
 #if SKIP
+import android.os.ParcelUuid
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothAdapter
-import android.content.Context
+import android.bluetooth.BluetoothGattServer
+import android.bluetooth.BluetoothGattServerCallback
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 #else
 import CoreBluetooth
 #endif
@@ -15,27 +21,20 @@ import CoreBluetooth
 #if SKIP
 public class CBPeripheralManager: CBManager {
     private let advertiseDelegate = BleAdvertiseCallback(manager: self)
+    private let gattServerCallback = BleGattServerCallback(manager: self)
+
+    fileprivate var server: BluetoothGattServer?
 
     private var advertiser: BluetoothLeAdvertiser? {
         adapter?.getBluetoothLeAdvertiser()
     }
 
-    @available(*, unavailable)
     public var isAdvertising: Bool = false
 
     public var delegate: (any CBPeripheralManagerDelegate)? {
         didSet {
             logger.debug("CBPeripheralManager.delegate: sending state")
             delegate?.peripheralManagerDidUpdateState(self)
-        }
-    }
-
-    public var state: CBManagerState {
-        switch (adapter?.getState()) {
-        case BluetoothAdapter.STATE_ON:
-            return CBManagerState.poweredOn
-        default:
-            return CBManagerState.poweredOff
         }
     }
 
@@ -47,8 +46,11 @@ public class CBPeripheralManager: CBManager {
         }
     }
 
+    public func cleanup() {
+        server?.close()
+    }
+
     public func startAdvertising(_ advertisementData: [String: Any]?) {
-        // TODO: Use arguments to configure settings
         guard hasPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) else {
             logger.error("CBCentralManager.scanForPeripherals: Missing BLUETOOTH_SCAN permission. Requesting permission...")
             return
@@ -83,9 +85,10 @@ public class CBPeripheralManager: CBManager {
                     advertiseDataBuilder.setIncludeTxPowerLevel(true)
                 }
             case CBAdvertisementDataServiceUUIDsKey:
+                // SKIP NOWARN
                 if let serviceUUIDs = value as? [CBUUID] {
                     for uuid in serviceUUIDs {
-                        advertiseDataBuilder.addServiceUuid(uuid.kotlin())
+                        advertiseDataBuilder.addServiceUuid(ParcelUuid(uuid.kotlin()))
                     }
                 }
             case CBAdvertisementDataServiceDataKey:
@@ -102,9 +105,10 @@ public class CBPeripheralManager: CBManager {
                     settingsBuilder.setConnectable(isConnectable.intValue != 0)
                 }
             case CBAdvertisementDataSolicitedServiceUUIDsKey:
+                // SKIP NOWARN
                 if let solicitedServiceUUIDs = value as? [CBUUID] {
                     for uuid in solicitedServiceUUIDs {
-                        advertiseDataBuilder.addServiceSolicitationUuid(uuid.kotlin())
+                        advertiseDataBuilder.addServiceSolicitationUuid(ParcelUuid(uuid.kotlin()))
                     }
                 }
             default:
@@ -118,25 +122,32 @@ public class CBPeripheralManager: CBManager {
 
         logger.log("CBPeripheralManager.startAdvertising: Begin advertising")
         advertiser?.startAdvertising(settings, advertiseData, advertiseDelegate)
+        isAdvertising = true
     }
 
-    func stopAdvertising() {
+    public func stopAdvertising() {
         guard hasPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) else {
             logger.error("CBCentralManager.scanForPeripherals: Missing BLUETOOTH_SCAN permission. Requesting permission...")
             return
         }
-
         advertiser?.stopAdvertising(advertiseDelegate)
+        isAdvertising = false
     }
 
-    @available(*, unavailable)
-    open func add(_ service: CBMutableService) {}
+    open func add(_ service: CBMutableService) {
+        if server == nil {
+            server = bluetoothManager?.openGattServer(context, gattServerCallback)
+        }
+
+        _ = server?.addService(service.kotlin())
+    }
 
     @available(*, unavailable)
     open func remove(_ service: CBMutableService) {}
 
-    @available(*, unavailable)
-    open func removeAllServices() { }
+    open func removeAllServices() {
+        server?.clearServices()
+    }
 
     #if !SKIP
     @available(*, unavailable)
@@ -146,13 +157,43 @@ public class CBPeripheralManager: CBManager {
     public init(delegate: (any CBPeripheralManagerDelegate)?, queue: DispatchQueue?, options: [String : Any]? = nil) {}
     #endif
 
-    @available(*, unavailable)
-    open func respond(to request: CBATTRequest, withResult result: CBATTError.Code) {}
+    open func respond(to request: CBATTRequest, withResult result: CBATTError.Code) {
+        guard let server = server else {
+            logger.error("CBPeripheralManager.respond: Invalid server state")
+            return
+        }
+        server?.sendResponse(
+            request.central.kotlin(),
+            request.id,
+            result.rawValue,
+            request.offset,
+            request.value?.kotlin()
+        )
+    }
+
+    open func updateValue(_ value: Data, for characteristic: CBMutableCharacteristic, onSubscribedCentrals centrals: [CBCentral]?) -> Bool {
+        guard let server = server else {
+            logger.error("CBPeripheralManager.updateValue: Fatal error -- server should never be nil")
+            return false
+        }
+        var ret = BluetoothStatusCodes.SUCCESS
+
+        if centrals == nil {
+            for device in bluetoothManager?.getConnectedDevices(BluetoothProfile.GATT_SERVER) ?? [] {
+                ret = ret | server.notifyCharacteristicChanged(device, characteristic.kotlin(), characteristic.isNotifying, value.kotlin())
+            }
+        } else {
+            for central in centrals ?? [] {
+                ret = ret | server.notifyCharacteristicChanged(central.kotlin(), characteristic.kotlin(), characteristic.isNotifying, value.kotlin())
+            }
+        }
+
+        logger.debug("CBPeripheralManager.updateValue: Return status is \(ret)")
+
+        return ret == BluetoothStatusCodes.SUCCESS
+    }
 
 #if !SKIP
-    @available(*, unavailable)
-    open func updateValue(_ value: Data, for characteristic: CBMutableCharacteristic, onSubscribedCentrals centrals: [CBCentral]?) -> Bool {}
-
     @available(*, unavailable)
     open class func authorizationStatus() -> CBPeripheralManagerAuthorizationStatus {}
 
@@ -204,25 +245,137 @@ public class CBPeripheralManager: CBManager {
         }
     }
 
+    private struct BleGattServerCallback: BluetoothGattServerCallback {
+        private let manager: CBPeripheralManager
+
+        init(manager: CBPeripheralManager) {
+            self.manager = manager
+        }
+
+        override func onDescriptorWriteRequest(
+                device: BluetoothDevice,
+                requestId: Int,
+                descriptor: BluetoothGattDescriptor,
+                preparedWrite: Boolean,
+                responseNeeded: Boolean,
+                offset: Int,
+                value: ByteArray
+            ) {
+                let central = CBCentral(device)
+                let characteristic = CBCharacteristic(platformValue: descriptor.characteristic)
+                if (descriptor.uuid == UUID.fromString(CCCD)?.kotlin()) {
+                    if (value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
+                        logger.debug("BleGattServerCallback.onDescriptorWriteRequest: Client subscribed to notifications for \(characteristic.uuid.uuidString)")
+                        manager.delegate?.peripheralManagerDidSubscribeTo(manager, central: central, characteristic)
+                    } else {
+                        logger.debug("BleGattServerCallback.onDescriptorWriteRequest: Client unsubscribed to notifications for \(characteristic.uuid.uuidString)")
+                        manager.delegate?.peripheralManagerDidUnsubscribeFrom(manager, central, characteristic)
+                    }
+
+                    // Send a response back to the client
+                    writeIfRequested(
+                        responseNeeded: responseNeeded,
+                        device,
+                        requestId,
+                        BluetoothGatt.GATT_SUCCESS,
+                        offset,
+                        value
+                    )
+                }
+
+                // TODO: Implement other descriptors
+                writeIfRequested(
+                    responseNeeded: responseNeeded,
+                    device,
+                    requestId,
+                    BluetoothGatt.GATT_FAILURE,
+                    offset,
+                    value
+                )
+            }
+
+
+        override func onCharacteristicReadRequest(device: BluetoothDevice,
+                                                  requestId: Int,
+                                                  offset: Int,
+                                                  characteristic: BluetoothGattCharacteristic) {
+            logger.debug("BleGattServerCallback.onCharacteristicReadRequest: Client requested characteristic read")
+            logger.debug("BleGattServerCallback.onCharacteristicReadRequest: Characteristic uuid: \(characteristic.uuid.toString())")
+            logger.debug("BleGattServerCallback.onCharacteristicReadRequest: Value: \(characteristic.value)")
+            let request = CBATTRequest(device, characteristic, offset, nil, requestId)
+            manager.delegate?.peripheralManager(manager, didReceiveRead: request)
+        }
+
+        override func onCharacteristicWriteRequest(
+                device: BluetoothDevice,
+                requestId: Int,
+                characteristic: BluetoothGattCharacteristic,
+                preparedWrite: Boolean,
+                responseNeeded: Boolean,
+                offset: Int,
+                value: ByteArray
+        ) {
+            let request = CBATTRequest(device, characteristic, offset, value, requestId)
+            manager.delegate?.peripheralManager(manager, didReceiveWrite: [request])
+        }
+
+        override func onExecuteWrite(device: BluetoothDevice?, requestId: Int, execute: Bool) {
+            guard execute else {
+                return
+            }
+
+            manager?.server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, nil)
+        }
+
+        private func writeIfRequested(
+            responseNeeded: Boolean,
+            _ device: BluetoothDevice,
+            _ requestId: Int,
+            _ state: Int,
+            _ offset: Int,
+            _ value: ByteArray
+        ) {
+            guard responseNeeded else {
+                return
+            }
+
+            manager?.server.sendResponse(
+                device,
+                requestId,
+                state,
+                offset,
+                value
+            )
+        }
+    }
 }
 
 public protocol CBPeripheralManagerDelegate : NSObjectProtocol {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager)
 
-    #if !SKIP
+#if !SKIP
     optional func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any])
     optional func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: (any Error)?)
     optional func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: (any Error)?)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest])
+#endif
+
+    func peripheralManagerDidSubscribeTo(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic)
+    func peripheralManagerDidUnsubscribeFrom(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic)
+    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest)
+    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest])
+#if !SKIP
     optional func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager)
     optional func peripheralManager(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
     optional func peripheralManager(_ peripheral: CBPeripheralManager, didUnpublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
     optional func peripheralManager(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
-    #endif
+#endif
 }
 
+public extension CBPeripheralManagerDelegate {
+    func peripheralManagerDidSubscribeTo(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {}
+    func peripheralManagerDidUnsubscribeFrom(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {}
+    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {}
+    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {}
+}
 
 #endif

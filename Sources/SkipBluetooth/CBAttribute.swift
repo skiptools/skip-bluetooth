@@ -1,9 +1,15 @@
 import Foundation
 
 #if SKIP
-open class CBAttribute: NSObject {
+open class CBAttribute: NSObject, Equatable {
+    open var uuid: CBUUID
 
-    @available(*, unavailable)
-    open var uuid: CBUUID { fatalError() }
+    internal init(uuid: CBUUID) {
+        self.uuid = uuid
+    }
+
+    static func == (lhs: CBAttribute, rhs: CBAttribute) -> Bool {
+        return lhs.uuid.uuidString == rhs.uuid.uuidString
+    }
 }
 #endif

@@ -11,7 +11,7 @@ open class CBDescriptor: CBAttribute {
 
 open class CBMutableDescriptor: CBDescriptor {
     public init(type UUID: CBUUID, value: Any?) {
-
+        super.init(UUID)
     }
 }
 

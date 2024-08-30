@@ -1,6 +1,9 @@
 import Foundation
 
 #if SKIP
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+
 public struct CBCharacteristicProperties: OptionSet, @unchecked Sendable {
     public let rawValue: Int
 
@@ -26,14 +29,39 @@ public struct CBCharacteristicProperties: OptionSet, @unchecked Sendable {
 }
 
 open class CBCharacteristic : CBAttribute {
+    internal var characteristic: BluetoothGattCharacteristic
+
+    internal init(type UUID: CBUUID, properties: CBCharacteristicProperties, permissions: CBAttributePermissions) {
+        super.init(UUID)
+        self.characteristic = BluetoothGattCharacteristic(UUID.kotlin(), properties.rawValue, permissions.rawValue)
+
+        // Setup notifications if needed
+        if properties.contains(.notify) || properties.contains(.indicate) {
+            let cccd = BluetoothGattDescriptor(
+                java.util.UUID.fromString(CCCD),
+                BluetoothGattDescriptor.PERMISSION_READ | BluetoothGattDescriptor.PERMISSION_WRITE
+            )
+            characteristic.addDescriptor(cccd)
+        }
+    }
+
+    internal init(platformValue: BluetoothGattCharacteristic) {
+        super.init(uuid: CBUUID(string: platformValue.uuid.toString()))
+        characteristic = platformValue
+    }
+
+    internal init(platformValue: BluetoothGattCharacteristic, value: Data) {
+        self.init(platformValue: platformValue)
+        self.value = value
+    }
+
     @available(*, unavailable)
     open var service: CBService? { fatalError() }
 
     @available(*, unavailable)
     open var properties: CBCharacteristicProperties { fatalError() }
 
-    @available(*, unavailable)
-    open var value: Data? { fatalError() }
+    open private(set) var value: Data?
 
     @available(*, unavailable)
     open var descriptors: [CBDescriptor]? { fatalError() }
@@ -41,34 +69,47 @@ open class CBCharacteristic : CBAttribute {
     @available(*, unavailable)
     open var isBroadcasted: Bool { fatalError() }
 
-    @available(*, unavailable)
-    open var isNotifying: Bool { fatalError() }
+    open private(set) var isNotifying: Bool = false
+
+    internal func setIsNotifying(to isNotifying: Boolean) {
+        self.isNotifying = isNotifying
+    }
+}
+
+public extension CBCharacteristic: KotlinConverting<BluetoothGattCharacteristic> {
+    public override func kotlin(nocopy: Bool) -> BluetoothGattCharacteristic {
+        return characteristic
+    }
 }
 
 public struct CBAttributePermissions: OptionSet, @unchecked Sendable {
     public let rawValue: Int
 
     public static let readable = CBAttributePermissions(rawValue: 1 << 0)
-    public static let writeable = CBAttributePermissions(rawValue: 1 << 1)
-    public static let readEncryptionRequired = CBAttributePermissions(rawValue: 1 << 2)
-    public static let writeEncryptionRequired = CBAttributePermissions(rawValue: 1 << 3)
+    public static let readEncryptionRequired = CBAttributePermissions(rawValue: 1 << 1)
+    public static let writeable = CBAttributePermissions(rawValue: 1 << 4)
+    public static let writeEncryptionRequired = CBAttributePermissions(rawValue: 1 << 5)
 }
 
-open class CBMutableCharacteristic : CBCharacteristic {
+open class CBMutableCharacteristic: CBCharacteristic {
+
     open var permissions: CBAttributePermissions
 
     @available(*, unavailable)
     open var subscribedCentrals: [CBCentral]? { fatalError() }
 
-    #if !SKIP
+#if !SKIP
     override var properties: CBCharacteristicProperties
     override var value: Data?
     override var descriptors: [CBDescriptor]?
-    #endif
+#endif
 
-    @available(*, unavailable)
-    public init(type UUID: CBUUID, properties: CBCharacteristicProperties, value: Data?, permissions: CBAttributePermissions) {fatalError()}
+    public init(type UUID: CBUUID, properties: CBCharacteristicProperties, value: Data?, permissions: CBAttributePermissions) {
+        /* TODO: Handle the case where value is not nil
+         In this case, this characteristic isn't dynamic, and you should cache the response as described here:
+         https://developer.apple.com/documentation/corebluetooth/cbmutablecharacteristic/init(type:properties:value:permissions:)
+         */
+        super.init(type: UUID, properties: properties, permissions: permissions)
+    }
 }
-
-
 #endif

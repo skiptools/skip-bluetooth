@@ -13,7 +13,7 @@ public enum CBPeripheralState : Int, @unchecked Sendable {
 }
 
 public enum CBCharacteristicWriteType : Int, @unchecked Sendable {
-    case withResponse = 0
+    case withResponse = 2
     case withoutResponse = 1
 }
 
@@ -62,16 +62,11 @@ internal extension ScanResult {
     }
 }
 
-internal extension BluetoothGatt {
-    var peripheral: CBPeripheral {
-        return CBPeripheral(gatt: self)
-    }
-}
-
 open class CBPeripheral: CBPeer {
     private var _name: String?
     private let stateWatcher = PeripheralStateWatcher { self.state = $0 }
-    private let gattDelegate = BleGattCallback(peripheral: self)
+
+    private var gattDelegate: BleGattCallback?
 
     internal let device: BluetoothDevice?
 
@@ -79,8 +74,9 @@ open class CBPeripheral: CBPeer {
     internal let gatt: BluetoothGatt?
 
     internal init(result: ScanResult) {
-        self._name = result?.scanRecord.deviceName
-        self.device = result?.device
+        super.init(macAddress: result.device.address)
+        self._name = result.scanRecord?.deviceName
+        self.device = result.device
 
         // Although we can get the `BluetoothDevice` from the `ScanResult`
         // we choose not to because in CoreBluetooth we some APIs aren't
@@ -88,25 +84,30 @@ open class CBPeripheral: CBPeer {
         self.gatt = nil
     }
 
-    internal init(gatt: BluetoothGatt) {
+    internal init(gatt: BluetoothGatt, gattDelegate: BleGattCallback) {
+        super.init(macAddress: gatt.device.address)
         self._name = gatt.device.name
         self.device = gatt.device
+        gattDelegate.peripheral = self
+
+        self.gattDelegate = gattDelegate
         self.gatt = gatt
     }
 
     open var delegate: (any CBPeripheralDelegate)? {
         get {
-            gattDelegate.delegate
+            gattDelegate?.peripheralDelegate
         } set {
-            gattDelegate.delegate = newValue
+            gattDelegate?.peripheralDelegate = newValue
         }
     }
 
     open var name: String? { _name }
     open private(set) var state: CBPeripheralState = CBPeripheralState.disconnected
 
-    @available(*, unavailable)
-    open var services: [CBService]? { fatalError() }
+    open var services: [CBService]? {
+        gattDelegate?.services
+    }
 
     @available(*, unavailable)
     open var canSendWriteWithoutResponse: Bool { fatalError() }
@@ -123,26 +124,55 @@ open class CBPeripheral: CBPeer {
         }
 
         // TODO: Filter services in callback
+
+        logger.debug("CBPeripheral.discoverService: discovering services...")
         gatt?.discoverServices();
     }
 
     @available(*, unavailable)
     open func discoverIncludedServices(_ includedServiceUUIDs: [CBUUID]?, for service: CBService) {}
 
-    @available(*, unavailable)
-    open func discoverCharacteristics(_ characteristicUUIDs: [CBUUID]?, for service: CBService) {}
+    open func discoverCharacteristics(_ characteristicUUIDs: [CBUUID]?, for service: CBService) {
+        service.setCharacteristicFilter(characteristicUUIDs)
+        delegate?.peripheral(self, didDiscoverCharacteristicsFor: service, error: nil)
+    }
 
-    @available(*, unavailable)
-    open func readValue(for characteristic: CBCharacteristic) {}
+    open func readValue(for characteristic: CBCharacteristic) {
+        gatt?.readCharacteristic(characteristic.kotlin())
+    }
 
     @available(*, unavailable)
     open func maximumWriteValueLength(for type: CBCharacteristicWriteType) -> Int { fatalError() }
 
-    @available(*, unavailable)
-    open func writeValue(_ data: Data, for characteristic: CBCharacteristic, type: CBCharacteristicWriteType) {}
+    open func writeValue(_ data: Data, for characteristic: CBCharacteristic, type: CBCharacteristicWriteType) {
+        logger.debug("CBPeripheral.writeValue: Writing packet:")
+        logger.debug("CBPeripheral.writeValue: UUID is \(characteristic.uuid.uuidString)")
+        logger.debug("CBPeripheral.writeValue: Data is \(data.base64EncodedString())")
+        logger.debug("CBPeripheral.writeValue: Type is \(type)")
+        gatt?.writeCharacteristic(characteristic.kotlin(), data.kotlin(), type.rawValue)
+    }
 
-    @available(*, unavailable)
-    open func setNotifyValue(_ enabled: Bool, for characteristic: CBCharacteristic) {}
+    open func setNotifyValue(_ enabled: Bool, for characteristic: CBCharacteristic) {
+        guard let gatt = gatt else {
+            logger.error("CBPeripheral.setNotifyValue: `gatt` is null which should never happen.")
+            return
+        }
+
+        guard gatt.setCharacteristicNotification(characteristic.kotlin(), enabled) ?? false else {
+            logger.warning("CBPeripheral.setNotifyValue: Failed to setup characteristic subscription")
+            return
+        }
+
+        guard let descriptor = characteristic.kotlin().getDescriptor(java.util.UUID.fromString(CCCD)) else {
+            logger.warning("CBPeripheral.setNotifyValue: Failed to find notification descriptor")
+            return
+        }
+
+        characteristic.kotlin().setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        let value = enabled ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+
+        gatt.writeDescriptor(descriptor, value);
+    }
 
     @available(*, unavailable)
     open func discoverDescriptors(for characteristic: CBCharacteristic) {}
@@ -162,7 +192,7 @@ open class CBPeripheral: CBPeer {
             self.completion = completion
         }
 
-        override func onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+        override func onConnectionStateChange(gatt: BluetoothGatt, state: Int, newState: Int) {
             switch (newState) {
             case BluetoothProfile.STATE_DISCONNECTED:
                 logger.debug("CBPeripheral: Device disconnected")
@@ -183,42 +213,6 @@ open class CBPeripheral: CBPeer {
             }
         }
     }
-
-    private struct BleGattCallback: BluetoothGattCallback {
-        private let peripheral: CBPeripheral
-        var delegate: CBPeripheralDelegate? {
-            didSet {
-                delegate = newValue
-            }
-        }
-
-        init(_ peripheral: CBPeripheral) {
-            self.peripheral = peripheral
-        }
-
-        override func onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            super.onServicesDiscovered(gatt, status)
-
-            if status != BluetoothGatt.GATT_SUCCESS {
-                delegate?.peripheral(peripheral: peripheral, didDiscoverServices: nil)
-            } else {
-                let error = NSError(domain: "SkipBluetooth", code: status, userInfo: nil)
-                delegate?.peripheral(peripheral: peripheral, didDiscoverServices: error)
-            }
-        }
-
-        override func onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int ) {
-            super.onCharacteristicRead(gatt, characteristic, value, status)
-        }
-
-        override func onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            super.onCharacteristicWrite(gatt, characteristic, status)
-        }
-        
-        override func onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-            super.onCharacteristicChanged(gatt, characteristic, value)
-        }
-    }
 }
 
 public protocol CBPeripheralDelegate : NSObjectProtocol {
@@ -227,16 +221,18 @@ public protocol CBPeripheralDelegate : NSObjectProtocol {
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: (any Error)?)
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?)
 
-    #if !SKIP
+#if !SKIP
     optional func peripheral(_ peripheral: CBPeripheral, didDiscoverIncludedServicesFor service: CBService, error: (any Error)?)
-    optional func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?)
-    optional func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?)
-    optional func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?)
-    optional func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?)
+#endif
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?)
+    func peripheralDidUpdateValueFor(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?)
+    func peripheralDidUpdateNotificationStateFor(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?)
+#if !SKIP
     optional func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?)
     optional func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: (any Error)?)
-    #endif
+#endif
 
+    func peripheralDidWriteValueFor(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?)
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?)
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral)
     func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
@@ -248,9 +244,15 @@ public extension CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: (any Error)?) {}
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {}
 
+    func peripheralDidWriteValueFor(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?) {}
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?) {}
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {}
     func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?) {}
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {}
+    func peripheralDidUpdateNotificationStateFor(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?) {}
+    func peripheralDidUpdateValueFor(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {}
 }
 
 #endif
+
+

@@ -17,8 +17,9 @@ import CoreBluetooth
 let logger: Logger = Logger(subsystem: "skip.bluetooth", category: "SkipBluetooth") // adb logcat '*:S' 'skip.bluetooth.SkipBluetooth:V'
 
 #if SKIP
-open class CBService: KotlinConverting<BluetoothGattService> {
-    private let service: BluetoothGattService
+open class CBService {
+    fileprivate let service: BluetoothGattService
+    private private(set) var characteristicFilter: [CBUUID]? = []
 
     @available(*, unavailable)
     weak open var peripheral: CBPeripheral? { fatalError() }
@@ -34,26 +35,65 @@ open class CBService: KotlinConverting<BluetoothGattService> {
         fatalError()
     }
 
-    @available(*, unavailable)
     open var characteristics: [CBCharacteristic]? {
-        fatalError()
+        get {
+            var result: [CBCharacteristic] = []
+
+            guard characteristicFilter != nil else {
+                return Array(service.characteristics.map { CBCharacteristic(platformValue: $0) })
+            }
+
+            for uuid in characteristicFilter! {
+                if let toAdd = service.getCharacteristic(uuid.kotlin()) {
+                    result.append(CBCharacteristic(toAdd))
+                }
+            }
+            return result
+        }
     }
 
-    init(service: BluetoothGattService) {
+    internal init(type UUID: CBUUID, primary isPrimary: Bool) {
+        service = BluetoothGattService(UUID.kotlin(), isPrimary ? BluetoothGattService.SERVICE_TYPE_PRIMARY : BluetoothGattService.SERVICE_TYPE_SECONDARY)
+    }
+
+    internal init(_ service: BluetoothGattService) {
         self.service = service
     }
 
+    /// Adds a characteristic filter
+    ///
+    /// This allows us to simulate the effect of discovering characteristics
+    /// despite already having all characteristics available after service discovery
+    internal func setCharacteristicFilter(_ filter: [CBUUID]?) {
+        characteristicFilter = filter
+    }
+}
+
+public extension CBService: KotlinConverting<BluetoothGattService> {
     public override func kotlin(nocopy: Bool) -> BluetoothGattService {
-        service
+        return service
     }
 }
 
 open class CBMutableService: CBService {
-    #if !SKIP
+    public init(type UUID: CBUUID, primary isPrimary: Bool) {
+        super.init(UUID, isPrimary)
+    }
+
+#if !SKIP
     open var includedServices: [CBService]?
-    open var characteristics: [CBCharacteristic]?
-    public init(type UUID: CBUUID, primary isPrimary: Bool)
-    #endif
+#endif
+
+    override open var characteristics: [CBCharacteristic]? {
+        get {
+            super.characteristics
+        } set {
+            // TODO: ensure there's no double-adding of services
+            for characteristic in newValue ?? [] {
+                service.addCharacteristic(characteristic.kotlin())
+            }
+        }
+    }
 }
 
 public enum CBManagerState: Int {
@@ -64,4 +104,11 @@ public enum CBManagerState: Int {
     case poweredOff
     case poweredOn
 }
+
+extension BluetoothGattService {
+    func toService() -> CBService {
+        CBService(self)
+    }
+}
+
 #endif

@@ -1,7 +1,6 @@
 import Foundation
 
 #if SKIP
-import android.os.ParcelUuid
 
 public let CBUUIDCharacteristicExtendedPropertiesString: String = "2900"
 public let CBUUIDCharacteristicUserDescriptionString: String = "2901"
@@ -44,9 +43,15 @@ open class CBUUID: NSObject {
     }
 }
 
-extension CBUUID: KotlinConverting<ParcelUuid> {
-    public override func kotlin(nocopy: Bool = false) -> ParcelUuid {
-        return ParcelUuid(uuid.kotlin())
+extension CBUUID: KotlinConverting<java.util.UUID> {
+    public override func kotlin(nocopy: Bool = false) -> java.util.UUID {
+        return uuid.kotlin()
+    }
+}
+
+extension CBUUID: Equatable {
+    public static func == (lhs: CBUUID, rhs: CBUUID) -> Bool {
+        return lhs.uuidString == rhs.uuidString
     }
 }
 
