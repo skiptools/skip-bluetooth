@@ -4,7 +4,7 @@ This is a free [Skip](https://skip.tools) Swift/Kotlin library project containin
 
 ## Implementation Instructions
 
-`SkipBluetooth` aims to provide API parity to `CoreBluetooth`, but in a few cases, this requires using `SKIP DECLARE:` in your implementation.
+`SkipBluetooth` aims to provide API parity to `CoreBluetooth`, but in a few cases, this requires using `// SKIP DECLARE:` in your implementation.
 
 There are delegate methods which have the same argument type signature (despite having differently-named parameters) in `CoreBluetooth`, and are therefore recognized as the same function to `gradle` since Kotlin doesn't differentiate between function calls based on parameter names. One such collision example is:
 
@@ -13,7 +13,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
 func centralManager(central: CBCentralManager, DidUpdateANCSAuthorizationFor peripheral: CBPeripheral)
 ```
 
-in order to implement these functions in your `CBCentralManagerDelegate` implementation, you should write the function call as you would do in Swift, but put the corresponding `// SKIP DECLARE: ...` line above that function which corresponds to the Kotlin-compliant API call.
+In order to implement these functions in your `CBCentralManagerDelegate` implementation, you should write the function call as you would do in Swift, but put the corresponding `// SKIP DECLARE: ...` line above that function which corresponds to the Kotlin-compliant API call.
 
 Here is an example:
 
@@ -26,7 +26,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
 }
 ```
 
-Here is a list of all such available functions and their corresponding calls:
+Here is a list of all such currently-available functions and their corresponding calls:
 
 **CBCentralManagerDelegate**
 
@@ -55,7 +55,7 @@ Here is a list of all such available functions and their corresponding calls:
 
 Bluetooth requires permissions for both IOS and Kotlin, so you must add the following to your Info.plist file:
 
-- NSBluetoothAlwaysUsageDescription
+- [NSBluetoothAlwaysUsageDescription](https://developer.apple.com/documentation/bundleresources/information_property_list/nsbluetoothalwaysusagedescription)
 
 and these to your AndroidManifest.xml
 
@@ -87,7 +87,9 @@ and these to your AndroidManifest.xml
 > You must request runtime permissions in an `#IF SKIP` block to prevent your app from crashing
 
 Before using any Bluetooth API's, you must request user permissions **in the body of the view or function**
-which will use Bluetooth. An example:
+which will use Bluetooth.
+
+An example:
 
 ```
 import SwiftUI
@@ -107,7 +109,8 @@ struct ContentView: View {
 ```
 
 This will request Bluetooth permissions as soon as the view appears. Subsequent loads of this view will
-not show the prompt again--you will have to request the user to enable Bluetooth in settings.
+not show the prompt again—you will have to request the user to enable Bluetooth in settings if they denied
+permission previously.
 
 There may be a better implementation which automatically shows this prompt when `CBCentralManager` or
 `CBPeripheralManager` are instantiated as is done in `CoreBluetooth`
@@ -131,7 +134,3 @@ Kotlin JUnit tests in the Robolectric Android simulation environment.
 
 Parity testing can be performed with `skip test`,
 which will output a table of the test results for both platforms.
-
-```
-
-```
