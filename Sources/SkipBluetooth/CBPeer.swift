@@ -5,7 +5,6 @@
 import Foundation
 
 #if SKIP
-import SkipFoundation
 
 open class CBPeer: NSObject {
     open var identifier: UUID

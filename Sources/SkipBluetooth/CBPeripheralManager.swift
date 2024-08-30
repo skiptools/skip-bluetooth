@@ -18,11 +18,13 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
-#else
-import CoreBluetooth
-#endif
 
-#if SKIP
+public enum CBPeripheralManagerConnectionLatency : Int, @unchecked Sendable {
+    case low
+    case medium
+    case high
+}
+
 public class CBPeripheralManager: CBManager {
     private let advertiseDelegate = BleAdvertiseCallback(manager: self)
     private let gattServerCallback = BleGattServerCallback(manager: self)
@@ -153,13 +155,11 @@ public class CBPeripheralManager: CBManager {
         server?.clearServices()
     }
 
-    #if !SKIP
     @available(*, unavailable)
     public convenience init(delegate: (any CBPeripheralManagerDelegate)?, queue: DispatchQueue?) {}
 
     @available(*, unavailable)
     public init(delegate: (any CBPeripheralManagerDelegate)?, queue: DispatchQueue?, options: [String : Any]? = nil) {}
-    #endif
 
     open func respond(to request: CBATTRequest, withResult result: CBATTError.Code) {
         guard let server = server else {
@@ -197,10 +197,6 @@ public class CBPeripheralManager: CBManager {
         return ret == BluetoothStatusCodes.SUCCESS
     }
 
-#if !SKIP
-    @available(*, unavailable)
-    open class func authorizationStatus() -> CBPeripheralManagerAuthorizationStatus {}
-
     @available(*, unavailable)
     open func setDesiredConnectionLatency(_ latency: CBPeripheralManagerConnectionLatency, for central: CBCentral) {}
 
@@ -209,7 +205,6 @@ public class CBPeripheralManager: CBManager {
 
     @available(*, unavailable)
     open func unpublishL2CAPChannel(_ PSM: CBL2CAPPSM) {}
-#endif
 
     private struct BleAdvertiseCallback: AdvertiseCallback {
         private let manager: CBPeripheralManager
@@ -219,33 +214,42 @@ public class CBPeripheralManager: CBManager {
         }
 
         override func onStartSuccess(settingsInEffect: AdvertiseSettings) {
-            super.onStartSuccess(settingsInEffect)
+            manager.delegate?.peripheralManagerDidStartAdvertising(manager, error: nil)
             logger.debug("BleAdvertiseCallback.onStartSuccess: Advertising started successfully")
         }
 
         override func onStartFailure(errorCode: Int) {
-            super.onStartFailure(errorCode)
             logger.error("BleAdvertiseCallback.onStartFailure: Advertising failed with error code: $errorCode")
+            var description = "Unknown error"
             switch (errorCode) {
             case AdvertiseCallback.ADVERTISE_FAILED_DATA_TOO_LARGE:
                 logger.error("BleAdvertiseCallback.onStartFailure: Failed: Data too large")
+                description = "Data too large"
                 break
             case AdvertiseCallback.ADVERTISE_FAILED_TOO_MANY_ADVERTISERS:
                 logger.error("BleAdvertiseCallback.onStartFailure: Failed: Too many advertisers")
+                description = "Too many advertisers"
                 break
             case AdvertiseCallback.ADVERTISE_FAILED_ALREADY_STARTED:
                 logger.error("BleAdvertiseCallback.onStartFailure: Failed: Already started")
+                description = "Already started"
                 break
             case AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR:
                 logger.error("BleAdvertiseCallback.onStartFailure: Failed: Internal error")
+                description = "Internal error"
                 break
             case AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED:
                 logger.error("BleAdvertiseCallback.onStartFailure: Failed: Feature unsupported")
+                description = "Feature unsupported"
                 break
             default:
                 logger.error("BleAdvertiseCallback.onStartFailure: Failed: Unknown error")
+                description = "Unknown error"
                 break
             }
+
+            let error = NSError("skip.bluetooth", code: errorCode, userInfo: [NSLocalizedDescriptionKey: description])
+            manager.delegate?.peripheralManagerDidStartAdvertising(manager, error: error)
         }
     }
 
@@ -357,29 +361,40 @@ public class CBPeripheralManager: CBManager {
 public protocol CBPeripheralManagerDelegate : NSObjectProtocol {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager)
 
-#if !SKIP
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any])
-    optional func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: (any Error)?)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: (any Error)?)
-#endif
+    @available(*, unavailable)
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any])
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: (any Error)?)
+
+    @available(*, unavailable)
+    func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: (any Error)?)
 
     func peripheralManagerDidSubscribeTo(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic)
     func peripheralManagerDidUnsubscribeFrom(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic)
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest)
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest])
-#if !SKIP
-    optional func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, didUnpublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
-    optional func peripheralManager(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
-#endif
+
+    @available(*, unavailable)
+    func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager)
+    @available(*, unavailable)
+    func peripheralManagerDidPublishL2CAPChannel(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
+    @available(*, unavailable)
+    func peripheralManagerDidUnpublishL2CAPChannel(_ peripheral: CBPeripheralManager, didUnpublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
+    @available(*, unavailable)
+    func peripheralManagerDidOpen(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
 }
 
 public extension CBPeripheralManagerDelegate {
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {}
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: (any Error)?) {}
+    func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: (any Error)?) {}
     func peripheralManagerDidSubscribeTo(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {}
     func peripheralManagerDidUnsubscribeFrom(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {}
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {}
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {}
+    func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {}
+    func peripheralManagerDidPublishL2CAPChannel(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?) {}
+    func peripheralManagerDidUnpublishL2CAPChannel(_ peripheral: CBPeripheralManager, didUnpublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?) {}
+    func peripheralManagerDidOpen(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: (any Error)?) {}
 }
 
 #endif

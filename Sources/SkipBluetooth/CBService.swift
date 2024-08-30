@@ -2,7 +2,7 @@
 // under the terms of the GNU Lesser General Public License 3.0
 // as published by the Free Software Foundation https://fsf.org
 
-import SkipFoundation
+import Foundation
 import OSLog
 
 #if SKIP
@@ -80,9 +80,14 @@ open class CBMutableService: CBService {
         super.init(UUID, isPrimary)
     }
 
-#if !SKIP
-    open var includedServices: [CBService]?
-#endif
+    @available(*, unavailable)
+    override open var includedServices: [CBService]? {
+        get {
+            fatalError()
+        } set {
+            
+        }
+    }
 
     override open var characteristics: [CBCharacteristic]? {
         get {
@@ -96,14 +101,6 @@ open class CBMutableService: CBService {
     }
 }
 
-public enum CBManagerState: Int {
-    case unknown
-    case resetting
-    case unsupported
-    case unauthorized
-    case poweredOff
-    case poweredOn
-}
 
 extension BluetoothGattService {
     func toService() -> CBService {

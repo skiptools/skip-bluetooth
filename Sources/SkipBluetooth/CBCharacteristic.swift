@@ -33,11 +33,15 @@ public struct CBCharacteristicProperties: OptionSet, @unchecked Sendable {
 }
 
 open class CBCharacteristic : CBAttribute {
+    private var _value: Data? = nil
+    private var _properties: CBCharacteristicProperties = CBCharacteristicProperties(rawValue: 0)
+
     internal var characteristic: BluetoothGattCharacteristic
 
     internal init(type UUID: CBUUID, properties: CBCharacteristicProperties, permissions: CBAttributePermissions) {
         super.init(UUID)
         self.characteristic = BluetoothGattCharacteristic(UUID.kotlin(), properties.rawValue, permissions.rawValue)
+        self._properties = properties
 
         // Setup notifications if needed
         if properties.contains(.notify) || properties.contains(.indicate) {
@@ -52,20 +56,23 @@ open class CBCharacteristic : CBAttribute {
     internal init(platformValue: BluetoothGattCharacteristic) {
         super.init(uuid: CBUUID(string: platformValue.uuid.toString()))
         characteristic = platformValue
+        _properties = CBCharacteristicProperties(rawValue: platformValue.properties)
+        _value = nil
     }
 
     internal init(platformValue: BluetoothGattCharacteristic, value: Data) {
-        self.init(platformValue: platformValue)
-        self.value = value
+        super.init(uuid: CBUUID(string: platformValue.uuid.toString()))
+        characteristic = platformValue
+        _properties = CBCharacteristicProperties(rawValue: platformValue.properties)
+        _value = value
     }
 
     @available(*, unavailable)
     open var service: CBService? { fatalError() }
 
-    @available(*, unavailable)
-    open var properties: CBCharacteristicProperties { fatalError() }
+    open private(set) var properties: CBCharacteristicProperties { _properties }
 
-    open private(set) var value: Data?
+    open var value: Data? { _value }
 
     @available(*, unavailable)
     open var descriptors: [CBDescriptor]? { fatalError() }
@@ -102,11 +109,23 @@ open class CBMutableCharacteristic: CBCharacteristic {
     @available(*, unavailable)
     open var subscribedCentrals: [CBCentral]? { fatalError() }
 
-#if !SKIP
+    // The getter is handled by `CBCharacteristic`, the setter is unimplemented
+    @available(*, unavailable)
     override var properties: CBCharacteristicProperties
     override var value: Data?
-    override var descriptors: [CBDescriptor]?
-#endif
+
+    /* Although `CBCharacteristic` handles setting this value,
+       there is no logic here to set the underlying characteristic's descriptor value.
+       Look into `BluetoothGattCharacteristic.addDescriptor`
+     */
+    @available(*, unavailable)
+    override var descriptors: [CBDescriptor]? {
+        get {
+            fatalError()
+        } set {
+
+        }
+    }
 
     public init(type UUID: CBUUID, properties: CBCharacteristicProperties, value: Data?, permissions: CBAttributePermissions) {
         /* TODO: Handle the case where value is not nil
@@ -114,6 +133,7 @@ open class CBMutableCharacteristic: CBCharacteristic {
          https://developer.apple.com/documentation/corebluetooth/cbmutablecharacteristic/init(type:properties:value:permissions:)
          */
         super.init(type: UUID, properties: properties, permissions: permissions)
+        self.value = value
     }
 }
 #endif

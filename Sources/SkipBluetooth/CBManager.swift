@@ -35,6 +35,9 @@ public class CBManager {
         }
     }
 
+    @available(*, unavailable)
+    open class var authorization: CBManagerAuthorization { fatalError() }
+
     internal init() {
         self.stateChangedReceiver = StateChangedReceiver {
             stateChangedHandler?()
@@ -70,6 +73,22 @@ public class CBManager {
             }
         }
     }
-
 }
+
+public enum CBManagerState: Int {
+    case unknown
+    case resetting
+    case unsupported
+    case unauthorized
+    case poweredOff
+    case poweredOn
+}
+
+public enum CBManagerAuthorization : Int, @unchecked Sendable {
+    case notDetermined
+    case restricted
+    case denied
+    case allowedAlways
+}
+
 #endif

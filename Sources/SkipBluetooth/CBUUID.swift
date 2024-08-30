@@ -26,21 +26,19 @@ open class CBUUID: NSObject {
         uuid.uuidString
     }
 
-    public init(string: String) {
-        if let uuid = UUID(uuidString: string) {
+    public init(string theString: String) {
+        if let uuid = UUID(uuidString: theString) {
             self.uuid = uuid
         } else {
             self.uuid = UUID()
         }
     }
 
-#if !SKIP
     @available(*, unavailable)
     public init(data theData: Data) { fatalError()}
 
     @available(*, unavailable)
-    public init(cfuuid theUUID: CFUUID) { fatalError() }
-#endif
+    public init(cfuuid theUUID: Any) { fatalError() }
 
     public init(nsuuid: UUID) {
         self.uuid = nsuuid

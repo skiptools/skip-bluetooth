@@ -21,11 +21,6 @@ import android.content.pm.__
 import android.bluetooth.__
 import android.bluetooth.le.__
 import android.os.ParcelUuid
-#else
-import CoreBluetooth
-#endif
-
-#if SKIP
 
 public enum CBConnectionEvent: Int, @unchecked Sendable {
     case peerDisconnected = 0
@@ -35,7 +30,10 @@ public enum CBConnectionEvent: Int, @unchecked Sendable {
 open class CBCentralManager: CBManager {
     private let scanDelegate = BleScanCallback(central: self)
     private let gattDelegate = BleGattCallback(central: self)
-    private let bondingReceiver: BondCallback
+
+    private lazy var bondingReceiver: BondCallback! = BondCallback { device in
+        tryConnect(to: device)
+    }
 
     // TODO: Allow multiple connections at a time
     private var pendingGatts: BluetoothGatt?
@@ -55,11 +53,13 @@ open class CBCentralManager: CBManager {
 
     public var isScanning: Bool { adapter?.isDiscovering() ?? false }
 
-    public override init() {
+    public convenience init() {
         super.init()
+
         stateChangedHandler = {
             delegate?.centralManagerDidUpdateState(self)
         }
+
         bondingReceiver = BondCallback { device in
             tryConnect(to: device)
         }
@@ -68,6 +68,12 @@ open class CBCentralManager: CBManager {
         let context = ProcessInfo.processInfo.androidContext
         context.registerReceiver(bondingReceiver, filter)
     }
+
+    @available(*, unavailable)
+    public convenience init(delegate: (any CBCentralManagerDelegate)?, queue: DispatchQueue?) { fatalError() }
+
+    @available(*, unavailable)
+    public init(delegate: (any CBCentralManagerDelegate)?, queue: DispatchQueue, options: [String : Any]? = nil) { fatalError() }
 
     open func scanForPeripherals(withServices serviceUUIDs: [CBUUID]?, options: [String : Any]? = nil) {
         guard hasPermission(android.Manifest.permission.BLUETOOTH_SCAN) else {
@@ -116,15 +122,15 @@ open class CBCentralManager: CBManager {
         scanner?.stopScan(scanDelegate)
     }
 
-#if !SKIP
-    open class func supports(_ features: CBCentralManager.Feature) -> Bool
+    @available(*, unavailable)
+    open class func supports(_ features: CBCentralManager.Feature) -> Bool { fatalError() }
 
-    public convenience init()
-    public convenience init(delegate: (any CBCentralManagerDelegate)?, queue: DispatchQueue?)
-    public init(delegate: (any CBCentralManagerDelegate)?, queue: dispatch_queue_t?, options: [String : Any]? = nil)
-    open func retrievePeripherals(withIdentifiers identifiers: [UUID]) -> [CBPeripheral]
-    open func retrieveConnectedPeripherals(withServices serviceUUIDs: [CBUUID]) -> [CBPeripheral]
-#endif
+    @available(*, unavailable)
+    open func retrievePeripherals(withIdentifiers identifiers: [UUID]) -> [CBPeripheral] { fatalError() }
+
+    @available(*, unavailable)
+    open func retrieveConnectedPeripherals(withServices serviceUUIDs: [CBUUID]) -> [CBPeripheral] { fatalError() }
+
     open func connect(_ peripheral: CBPeripheral, options: [String : Any]? = nil) {
         guard hasPermission(android.Manifest.permission.BLUETOOTH_CONNECT) else {
             logger.error("CBCentralManager.connect: Missing BLUETOOTH_CONNECT permission.")
@@ -144,10 +150,8 @@ open class CBCentralManager: CBManager {
         peripheral?.gatt.close()
     }
 
-#if !SKIP
-    open func registerForConnectionEvents(options: [CBConnectionEventMatchingOption : Any]? = nil)
-
-#endif
+    @available(*, unavailable)
+    open func registerForConnectionEvents(options: [CBConnectionEventMatchingOption : Any]? = nil) { }
 
     // MARK: NATIVE ANDROID AUXILIARY LOGIC
 
@@ -228,24 +232,24 @@ extension CBCentralManager {
     }
 }
 
-#if !SKIP
 extension CBCentralManager {
     public struct Feature : OptionSet, @unchecked Sendable {
+        public let rawValue: UInt
 
-        public init(rawValue: UInt)
+        public init(rawValue: UInt) {
+            self.rawValue = rawValue
+        }
 
         @available(*, unavailable)
         public static var extendedScanAndConnect: CBCentralManager.Feature { fatalError() }
     }
 }
-#endif
 
 public protocol CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager)
 
-#if !SKIP
+    @available(*, unavailable)
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any])
-#endif
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber)
 
     func centralManagerDidConnect(central: CBCentralManager, peripheral: CBPeripheral)
@@ -262,6 +266,7 @@ public protocol CBCentralManagerDelegate {
 
 public extension CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) { return }
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {}
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, timestamp: CFAbsoluteTime, isReconnecting: Bool, error: (any Error)?) { return }
     func centralManager(_ central: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent, for peripheral: CBPeripheral) { return }
     func centralManagerDidConnect(central: CBCentralManager, peripheral: CBPeripheral) { return }

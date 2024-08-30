@@ -138,7 +138,7 @@ open class CBPeripheral: CBPeer {
 
     open func discoverCharacteristics(_ characteristicUUIDs: [CBUUID]?, for service: CBService) {
         service.setCharacteristicFilter(characteristicUUIDs)
-        delegate?.peripheral(self, didDiscoverCharacteristicsFor: service, error: nil)
+        delegate?.peripheralDidDiscoverCharacteristicsFor(self, didDiscoverCharacteristicsFor: service, error: nil)
     }
 
     open func readValue(for characteristic: CBCharacteristic) {
@@ -222,23 +222,31 @@ open class CBPeripheral: CBPeer {
 public protocol CBPeripheralDelegate : NSObjectProtocol {
     func peripheralDidUpdateName(_ peripheral: CBPeripheral)
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService])
+
+    @available(*, unavailable)
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: (any Error)?)
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?)
 
-#if !SKIP
-    optional func peripheral(_ peripheral: CBPeripheral, didDiscoverIncludedServicesFor service: CBService, error: (any Error)?)
-#endif
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?)
+    @available(*, unavailable)
+    func peripheralDidDiscoverIncludedServicesFor(_ peripheral: CBPeripheral, didDiscoverIncludedServicesFor service: CBService, error: (any Error)?)
+    func peripheralDidDiscoverCharacteristicsFor(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?)
     func peripheralDidUpdateValueFor(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?)
     func peripheralDidUpdateNotificationStateFor(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?)
-#if !SKIP
-    optional func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?)
-    optional func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: (any Error)?)
-#endif
+
+    @available(*, unavailable)
+    func peripheralDidDiscoverDescriptorsFor(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?)
+    @available(*, unavailable)
+    func peripheralDidUpdateValueFor(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: (any Error)?)
 
     func peripheralDidWriteValueFor(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?)
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?)
+
+    @available(*, unavailable)
+    func peripheralDidWriteValueFor(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?)
+
+    @available(*, unavailable)
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral)
+
+    @available(*, unavailable)
     func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
 }
 
@@ -249,14 +257,16 @@ public extension CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {}
 
     func peripheralDidWriteValueFor(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?) {}
+    func peripheralDidWriteValueFor(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?) {}
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: (any Error)?) {}
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {}
     func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: (any Error)?) {}
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {}
+    func peripheralDidDiscoverIncludedServicesFor(_ peripheral: CBPeripheral, didDiscoverIncludedServicesFor service: CBService, error: (any Error)?) {}
+    func peripheralDidDiscoverCharacteristicsFor(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {}
+    func peripheralDidDiscoverDescriptorsFor(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?) {}
     func peripheralDidUpdateNotificationStateFor(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?) {}
     func peripheralDidUpdateValueFor(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {}
+    func peripheralDidUpdateValueFor(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: (any Error)?) {}
 }
 
 #endif
-
-
