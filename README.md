@@ -49,6 +49,7 @@ Here is a list of all such available functions and their corresponding calls:
 | `func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?)` | `// SKIP DECLARE: override fun peripheralDidUpdateValueFor(peripheral: CBPeripheral, didUpdateValueFor: CBCharacteristic, error: Error?)`
 | `func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?)` | `// SKIP DECLARE: override fun peripheralDidWriteValueFor(peripheral: CBPeripheral, didWriteValueFor: CBCharacteristic, error: Error?)` |
 | `func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?)` | `// SKIP DECLARE: override fun peripheralDidUpdateNotificationStateFor(peripheral: CBPeripheral, didUpdateNotificationStateFor: CBCharacteristic, error: Error?)` |
+| `func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?)` | `// SKIP DECLARE: override fun peripheralDidDiscoverCharacteristicsFor(peripheral: CBPeripheral, didDiscoverCharacteristicsFor: CBService, error: Error?)` |
 
 ### Asking for Permissions
 
@@ -58,7 +59,7 @@ Bluetooth requires permissions for both IOS and Kotlin, so you must add the foll
 
 and these to your AndroidManifest.xml
 
-````
+```
 <manifest>
     <!-- What you need generally -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
@@ -80,16 +81,15 @@ and these to your AndroidManifest.xml
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- other properties -->
 </manifest>
-    ```
+```
 
-> [!IMPORTANT]
+> [! IMPORTANT]
 > You must request runtime permissions in an `#IF SKIP` block to prevent your app from crashing
 
 Before using any Bluetooth API's, you must request user permissions **in the body of the view or function**
 which will use Bluetooth. An example:
 
-````
-
+```
 import SwiftUI
 
 #if SKIP
@@ -97,11 +97,11 @@ import SkipBluetooth
 #endif
 
 struct ContentView: View {
-var body: some View {
+    var body: some View {
 #if SKIP
-askForBluetoothPermissions()
+    askForBluetoothPermissions()
 #endif
-}
+    }
 }
 
 ```
@@ -131,4 +131,7 @@ Kotlin JUnit tests in the Robolectric Android simulation environment.
 
 Parity testing can be performed with `skip test`,
 which will output a table of the test results for both platforms.
+
+```
+
 ```
