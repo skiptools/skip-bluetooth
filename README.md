@@ -50,6 +50,68 @@ Here is a list of all such available functions and their corresponding calls:
 | `func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: (any Error)?)` | `// SKIP DECLARE: override fun peripheralDidWriteValueFor(peripheral: CBPeripheral, didWriteValueFor: CBCharacteristic, error: Error?)` |
 | `func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: (any Error)?)` | `// SKIP DECLARE: override fun peripheralDidUpdateNotificationStateFor(peripheral: CBPeripheral, didUpdateNotificationStateFor: CBCharacteristic, error: Error?)` |
 
+### Asking for Permissions
+
+Bluetooth requires permissions for both IOS and Kotlin, so you must add the following to your Info.plist file:
+
+- NSBluetoothAlwaysUsageDescription
+
+and these to your AndroidManifest.xml
+
+````
+<manifest>
+    <!-- What you need generally -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+
+    <!-- Allows elevated privileges (like turning on and off on android) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+
+    <!-- If you want central privileges
+
+    Because you can use bluetooth to discern the user's fine-grained location, you can use this attribute
+    to assure that you don't need bluetooth for their location (or remove it and signal your use in the converse)
+    -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+
+    <!-- If you want peripheral privileges -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- If you want to connect in either case -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- other properties -->
+</manifest>
+    ```
+
+> [!IMPORTANT]
+> You must request runtime permissions in an `#IF SKIP` block to prevent your app from crashing
+
+Before using any Bluetooth API's, you must request user permissions **in the body of the view or function**
+which will use Bluetooth. An example:
+
+````
+
+import SwiftUI
+
+#if SKIP
+import SkipBluetooth
+#endif
+
+struct ContentView: View {
+var body: some View {
+#if SKIP
+askForBluetoothPermissions()
+#endif
+}
+}
+
+```
+
+This will request Bluetooth permissions as soon as the view appears. Subsequent loads of this view will
+not show the prompt again--you will have to request the user to enable Bluetooth in settings.
+
+There may be a better implementation which automatically shows this prompt when `CBCentralManager` or
+`CBPeripheralManager` are instantiated as is done in `CoreBluetooth`
+
 ## Building
 
 This project is a free Swift Package Manager module that uses the
@@ -69,5 +131,4 @@ Kotlin JUnit tests in the Robolectric Android simulation environment.
 
 Parity testing can be performed with `skip test`,
 which will output a table of the test results for both platforms.
-
-# skip-bluetooth
+```
