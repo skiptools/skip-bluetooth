@@ -96,6 +96,10 @@ import SwiftUI
 
 #if SKIP
 import SkipBluetooth
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 #endif
 
 struct ContentView: View {
@@ -106,6 +110,25 @@ struct ContentView: View {
     }
 }
 
+/// Prompts the user to allow bluetooth permissions
+@Composable
+public func askForBluetoothPermissions() {
+    let requestPermissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestMultiplePermissions()) { perms in
+        // Handle permissions here if you'd like
+    }
+
+    let permissions: kotlin.Array<String> = kotlin.arrayOf(
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT
+    )
+
+    // Skip can't implicitly convert between kotlin.Array<string> and
+    // skip.lib.Array<String> hence the cast
+    SideEffect {
+        requestPermissionLauncher.launch(permissions)
+    }
+}
+#endif
 ```
 
 This will request Bluetooth permissions as soon as the view appears. Subsequent loads of this view will
