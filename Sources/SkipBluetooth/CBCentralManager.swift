@@ -6,10 +6,6 @@ import Foundation
 
 #if SKIP
 import androidx.__
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import android.__
 import android.content.IntentFilter
 import android.content.Intent
