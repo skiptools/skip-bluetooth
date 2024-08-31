@@ -5,44 +5,15 @@
 import Foundation
 
 #if SKIP
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import android.content.pm.PackageManager
-import android.Manifest
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 
 // MARK: Globals
 let CCCD = "00002902-0000-1000-8000-00805f9b34fb"
-
-
-/// Prompts the user to allow bluetooth permissions
-///
-/// This process is handled automatically by CoreBluetooth for Swift when you instantiate either
-/// `CBCentralManager` or `CBPeripheralManager`, but Android requires the request
-/// to occur within an activity.
-@Composable
-public func askForBluetoothPermissions() {
-    let requestPermissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestMultiplePermissions()) { perms in
-        // TODO: toggle bluetooth with another launcher
-    }
-
-    let permissions: kotlin.Array<String> = kotlin.arrayOf(
-        Manifest.permission.BLUETOOTH_SCAN,
-        Manifest.permission.BLUETOOTH_CONNECT
-    )
-
-    // Skip can't implicitly convert between kotlin.Array<string> and
-    // skip.lib.Array<String> hence the cast
-    SideEffect {
-        requestPermissionLauncher.launch(permissions)
-    }
-}
 
 /// Checks if the given permission is granted
 internal func hasPermission(_ permission: String) -> Bool {
