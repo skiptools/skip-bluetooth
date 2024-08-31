@@ -19,11 +19,22 @@ let package = Package(
         .library(name: "SkipBluetooth", targets: ["SkipBluetooth"]),
     ],
     dependencies: [
-        .package(url: "https://source.skip.tools/skip.git", from: "0.8.55"),
-        .package(url: "https://source.skip.tools/skip-foundation.git", from: "0.0.0")
+        .package(url: "https://source.skip.tools/skip.git", from: "1.0.4"),
+        .package(url: "https://source.skip.tools/skip-foundation.git", from: "1.1.0"),
     ],
     targets: [
-        .target(name: "SkipBluetooth", dependencies: (zero ? [] : [.product(name: "SkipFoundation", package: "skip-foundation")]), resources: [.process("Resources")], plugins: skipstone),
+        .target(
+            name: "SkipBluetooth",
+            dependencies: (zero ? [] : [
+                .product(
+                    name: "SkipFoundation",
+                    package: "skip-foundation"
+                ),
+            ]
+            ),
+            resources: [.process("Resources")],
+            plugins: skipstone
+        ),
         .testTarget(name: "SkipBluetoothTests", dependencies: ["SkipBluetooth"] + (zero ? [] : [.product(name: "SkipTest", package: "skip")]), resources: [.process("Resources")], plugins: skipstone),
     ]
 )
