@@ -1,7 +1,7 @@
 // This is free software: you can redistribute and/or modify it
 // under the terms of the GNU Lesser General Public License 3.0
 // as published by the Free Software Foundation https://fsf.org
-
+#if !SKIP_BRIDGE
 import Foundation
 
 #if SKIP
@@ -126,3 +126,5 @@ public struct CBATTError: CustomNSError, Hashable, Error {
     public static var insufficientResources: CBATTError.Code { .insufficientResources }
 }
 #endif
+#endif
+
