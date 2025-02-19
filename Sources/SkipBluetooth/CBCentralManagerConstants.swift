@@ -1,7 +1,7 @@
 // This is free software: you can redistribute and/or modify it
 // under the terms of the GNU Lesser General Public License 3.0
 // as published by the Free Software Foundation https://fsf.org
-
+#if !SKIP_BRIDGE
 public let CBCentralManagerOptionShowPowerAlertKey: String = "kCBInitOptionShowPowerAlert"
 public let CBCentralManagerOptionRestoreIdentifierKey: String = "kCBRestoreIdentifierKey"
 public let CBCentralManagerOptionDeviceAccessForMedia: String = "kCBInitOptionDeviceAccessForMedia"
@@ -29,3 +29,5 @@ extension CBConnectionEventMatchingOption {
 }
 
 public let CBConnectPeripheralOptionEnableAutoReconnect: String = "kCBConnectOptionEnableAutoReconnect"
+#endif
+
