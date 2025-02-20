@@ -70,6 +70,7 @@ open class CBService {
 }
 
 public extension CBService: KotlinConverting<BluetoothGattService> {
+    // SKIP @nobridge
     public override func kotlin(nocopy: Bool) -> BluetoothGattService {
         return service
     }

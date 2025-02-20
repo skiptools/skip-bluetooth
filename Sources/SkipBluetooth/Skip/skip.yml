@@ -6,3 +6,5 @@
 #    - block: 'dependencies'
 #      contents:
 #        - 'implementation("androidx.compose.runtime:runtime")'
+skip:
+  bridging: true
