@@ -65,9 +65,11 @@ open class CBCentralManager: CBManager {
         context.registerReceiver(bondingReceiver, filter)
     }
 
+    // SKIP @nobridge
     @available(*, unavailable)
     public convenience init(delegate: (any CBCentralManagerDelegate)?, queue: DispatchQueue?) { fatalError() }
 
+    // SKIP @nobridge
     @available(*, unavailable)
     public init(delegate: (any CBCentralManagerDelegate)?, queue: DispatchQueue, options: [String : Any]? = nil) { fatalError() }
 
@@ -230,8 +232,10 @@ extension CBCentralManager {
 
 extension CBCentralManager {
     public struct Feature : OptionSet, @unchecked Sendable {
+        // SKIP @nobridge
         public let rawValue: UInt
 
+        // SKIP @nobridge
         public init(rawValue: UInt) {
             self.rawValue = rawValue
         }

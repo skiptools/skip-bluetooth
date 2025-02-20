@@ -186,6 +186,7 @@ open class CBPeripheral: CBPeer {
     @available(*, unavailable)
     open func writeValue(_ data: Data, for descriptor: CBDescriptor) {}
 
+    // SKIP @nobridge
     @available(*, unavailable)
     open func openL2CAPChannel(_ PSM: CBL2CAPPSM) {}
 

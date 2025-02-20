@@ -26,6 +26,7 @@ internal extension CBCentral: KotlinConverting<BluetoothDevice> {
         self.device = platformValue
     }
 
+    // SKIP @nobridge
     override func kotlin(noCopy: Bool) -> BluetoothDevice {
         device
     }

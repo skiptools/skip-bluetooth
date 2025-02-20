@@ -18,6 +18,7 @@ public struct CBError: CustomNSError, Hashable, Error {
     }
 
     // NSError Initialization
+    // SKIP @nobridge
     public init(_nsError: NSError) {
         self.code = Code(rawValue: _nsError.code) ?? Code.unknown
     }
@@ -77,6 +78,7 @@ public struct CBATTError: CustomNSError, Hashable, Error {
     }
 
     // NSError Initialization
+    // SKIP @nobridge
     public init(_nsError: NSError) {
         self.code = Code(rawValue: _nsError.code) ?? Code.success
     }
