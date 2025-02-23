@@ -68,6 +68,7 @@ internal extension ScanResult {
 
 open class CBPeripheral: CBPeer {
     private var _name: String?
+    private var _address: String?
     private let stateWatcher = PeripheralStateWatcher { self.state = $0 }
 
     private var gattDelegate: BleGattCallback?
@@ -80,6 +81,7 @@ open class CBPeripheral: CBPeer {
     internal init(result: ScanResult) {
         super.init(macAddress: result.device.address)
         self._name = result.scanRecord?.deviceName
+        self._address = result.device.address
         self.device = result.device
 
         // Although we can get the `BluetoothDevice` from the `ScanResult`
@@ -91,6 +93,7 @@ open class CBPeripheral: CBPeer {
     internal init(gatt: BluetoothGatt, gattDelegate: BleGattCallback) {
         super.init(macAddress: gatt.device.address)
         self._name = gatt.device.name
+        self._address = result.device.address
         self.device = gatt.device
         gattDelegate.peripheral = self
 
@@ -107,6 +110,7 @@ open class CBPeripheral: CBPeer {
     }
 
     open var name: String? { _name }
+    open var address: String? { _address }
     open private(set) var state: CBPeripheralState = CBPeripheralState.disconnected
 
     open var services: [CBService]? {
