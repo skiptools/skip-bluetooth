@@ -93,7 +93,7 @@ open class CBPeripheral: CBPeer {
     internal init(gatt: BluetoothGatt, gattDelegate: BleGattCallback) {
         super.init(macAddress: gatt.device.address)
         self._name = gatt.device.name
-        self._address = result.device.address
+        self._address = gatt.device.address
         self.device = gatt.device
         gattDelegate.peripheral = self
 
