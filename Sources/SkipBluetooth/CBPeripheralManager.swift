@@ -153,9 +153,11 @@ public class CBPeripheralManager: CBManager {
         server?.clearServices()
     }
 
+    // SKIP @nobridge
     @available(*, unavailable)
     public convenience init(delegate: (any CBPeripheralManagerDelegate)?, queue: DispatchQueue?) {}
 
+    // SKIP @nobridge
     @available(*, unavailable)
     public init(delegate: (any CBPeripheralManagerDelegate)?, queue: DispatchQueue?, options: [String : Any]? = nil) {}
 
@@ -201,6 +203,7 @@ public class CBPeripheralManager: CBManager {
     @available(*, unavailable)
     open func publishL2CAPChannel(withEncryption encryptionRequired: Bool) {}
 
+    // SKIP @nobridge
     @available(*, unavailable)
     open func unpublishL2CAPChannel(_ PSM: CBL2CAPPSM) {}
 
@@ -373,10 +376,13 @@ public protocol CBPeripheralManagerDelegate : NSObjectProtocol {
 
     @available(*, unavailable)
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager)
+    // SKIP @nobridge
     @available(*, unavailable)
     func peripheralManagerDidPublishL2CAPChannel(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
+    // SKIP @nobridge
     @available(*, unavailable)
     func peripheralManagerDidUnpublishL2CAPChannel(_ peripheral: CBPeripheralManager, didUnpublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?)
+    // SKIP @nobridge
     @available(*, unavailable)
     func peripheralManagerDidOpen(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: (any Error)?)
 }
@@ -390,8 +396,11 @@ public extension CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {}
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {}
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {}
+    // SKIP @nobridge
     func peripheralManagerDidPublishL2CAPChannel(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?) {}
+    // SKIP @nobridge
     func peripheralManagerDidUnpublishL2CAPChannel(_ peripheral: CBPeripheralManager, didUnpublishL2CAPChannel PSM: CBL2CAPPSM, error: (any Error)?) {}
+    // SKIP @nobridge
     func peripheralManagerDidOpen(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: (any Error)?) {}
 }
 
