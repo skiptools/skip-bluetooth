@@ -56,6 +56,71 @@ extension ScanResult {
             advertisementData[CBAdvertisementDataServiceUUIDsKey] = uuids.map { $0.uuid }
         }
 
+        // Android's ScanRecord.getServiceUuids()/getDeviceName() return null when the
+        // advertisement contains a malformed AD structure: the strict Android parser
+        // trips over it and nulls out the ENTIRE record, so any device whose firmware
+        // emits one broken field becomes undiscoverable even though its name and
+        // service UUIDs are physically present in the packet (other stacks - iOS
+        // CoreBluetooth, bleak, nRF Connect - read them fine). Malformed fields are
+        // not rare in low-cost BLE peripherals; e.g. DiFluid Microbalance scales
+        // advertise a broken 0xFF manufacturer data field (nRF Connect reports
+        // "Error while parsing EIR (0xFF): 0x00"). Parse the raw getBytes()
+        // ourselves, leniently: skip the broken structure by its declared length and
+        // recover the name and the 16-bit Service UUIDs. Devices detected ONLY by
+        // name would otherwise silently never be found.
+        if (advertisementData[CBAdvertisementDataServiceUUIDsKey] == nil
+            || advertisementData[CBAdvertisementDataLocalNameKey] == nil),
+           let raw = scanRecord?.bytes {
+            let table = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"]
+            var recovered: [String] = []
+            var recoveredName: String? = nil
+            let n = raw.size
+            var i = 0
+            // Each AD structure: [length L][type][L-1 data bytes], next one at i+1+L.
+            while i + 1 < n {
+                let len = Int(raw[i]) & 0xFF
+                if len == 0 { break }            // end of meaningful data (zero padding)
+                if i + len >= n { break }        // structure runs past the buffer - stop
+                let type = Int(raw[i + 1]) & 0xFF
+                // 0x02 incomplete / 0x03 complete list of 16-bit Service UUIDs, little-endian
+                if type == 0x02 || type == 0x03 {
+                    var j = i + 2
+                    while j + 1 <= i + len {
+                        let lo = Int(raw[j]) & 0xFF
+                        let hi = Int(raw[j + 1]) & 0xFF
+                        let h0 = table[(hi >> 4) & 0x0F]
+                        let h1 = table[hi & 0x0F]
+                        let l0 = table[(lo >> 4) & 0x0F]
+                        let l1 = table[lo & 0x0F]
+                        // expand the 16-bit code into the full Bluetooth Base UUID
+                        recovered.append("0000\(h0)\(h1)\(l0)\(l1)-0000-1000-8000-00805f9b34fb")
+                        j += 2
+                    }
+                }
+                // 0x08 shortened / 0x09 complete local name: data bytes are UTF-8 text
+                if type == 0x08 || type == 0x09 {
+                    var nameBytes: [UInt8] = []
+                    var j = i + 2
+                    while j <= i + len {
+                        nameBytes.append(UInt8(Int(raw[j]) & 0xFF))
+                        j += 1
+                    }
+                    if let decoded = String(bytes: nameBytes, encoding: String.Encoding.utf8),
+                       !decoded.isEmpty {
+                        recoveredName = decoded
+                    }
+                }
+                i += 1 + len
+            }
+            if advertisementData[CBAdvertisementDataServiceUUIDsKey] == nil, !recovered.isEmpty {
+                advertisementData[CBAdvertisementDataServiceUUIDsKey] = recovered
+            }
+            if advertisementData[CBAdvertisementDataLocalNameKey] == nil,
+               let recoveredName = recoveredName {
+                advertisementData[CBAdvertisementDataLocalNameKey] = recoveredName
+            }
+        }
+
         advertisementData[CBAdvertisementDataIsConnectable] = isConnectable
 
         // TODO: CBAdvertisementDataServiceDataKey
