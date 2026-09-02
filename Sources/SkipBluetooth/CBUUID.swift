@@ -50,6 +50,12 @@ extension CBUUID: Equatable {
     }
 }
 
+extension CBUUID: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(uuidString)
+    }
+}
+
 extension CBUUID: KotlinConverting<java.util.UUID> {
     // SKIP @nooverride
     public override func kotlin(nocopy: Bool = false) -> java.util.UUID {

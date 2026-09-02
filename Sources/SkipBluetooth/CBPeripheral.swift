@@ -35,10 +35,6 @@ extension ScanResult {
     ///         - `kCBAdvDataOverflowServiceUUIDs`
     ///         - `kCBAdvDataSolicitedServiceUUIDs`
     ///
-    /// The following are unimplemented:
-    /// - `CBAdvertisementDataManufacturerDataKey`
-    /// - `CBAdvertisementDataIsConnectable`
-    ///
     /// - Returns: The `advertisementData`
     private func parseAdvertisementData() -> [String: Any] {
         let advertisementData: [String: Any] = [:]
@@ -123,8 +119,38 @@ extension ScanResult {
 
         advertisementData[CBAdvertisementDataIsConnectable] = isConnectable
 
-        // TODO: CBAdvertisementDataServiceDataKey
-        // TODO: CBAdvertisementDataManufacturerDataKey
+        // Service data: ScanRecord provides Map<ParcelUuid, ByteArray>; CoreBluetooth
+        // exposes [CBUUID: Data]. The key is only set when data is present, matching
+        // iOS where the key is absent rather than holding an empty dictionary.
+        if let serviceData = scanRecord?.serviceData, !serviceData.isEmpty() {
+            var converted: [CBUUID: Data] = [:]
+            for entry in serviceData.entries {
+                converted[CBUUID(nsuuid: UUID(platformValue: entry.key.uuid))] = Data(platformValue: entry.value)
+            }
+            advertisementData[CBAdvertisementDataServiceDataKey] = converted
+        }
+
+        // Manufacturer data: ScanRecord provides SparseArray<company ID, payload>,
+        // while CoreBluetooth exposes a single Data of the 2-byte little-endian
+        // company ID followed by the payload. Advertisements carrying several
+        // company IDs are outside the common case; we surface the first entry to
+        // match the single Data value CoreBluetooth provides.
+        if let manufacturerData = scanRecord?.manufacturerSpecificData, manufacturerData.size() > 0 {
+            let companyId = manufacturerData.keyAt(0)
+            let payload = manufacturerData.valueAt(0)
+            var bytes: [UInt8] = []
+            bytes.append(UInt8(companyId & 0xFF))
+            bytes.append(UInt8((companyId >> 8) & 0xFF))
+            for b in payload {
+                bytes.append(UInt8(Int(b) & 0xFF))
+            }
+            advertisementData[CBAdvertisementDataManufacturerDataKey] = Data(bytes)
+        }
+
+        // The lenient raw-bytes fallback above intentionally does not try to recover
+        // these two keys: it only runs when the record is malformed, and the broken
+        // structure is typically the manufacturer data field itself - reconstructing
+        // it from a structure the platform parser already rejected would be guesswork.
 
         return advertisementData
     }
