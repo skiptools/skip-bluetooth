@@ -223,9 +223,24 @@ open class CBPeripheral: CBPeer {
 
         // TODO: Filter services in callback
 
-        logger.debug("CBPeripheral.discoverService: discovering services...")
-        gatt?.discoverServices();
+        // CoreBluetooth negotiates the ATT MTU on its own right after connecting, so iOS
+        // apps get 185+ byte notifications for free. Android keeps the default MTU of 23
+        // (20-byte payload) until the app asks for more, which leaves peripherals that
+        // stream larger frames (e.g. transparent-UART bridges) fragmenting or stalling.
+        // Ask for the maximum ATT MTU first and continue with service discovery from
+        // `onMtuChanged`; if the stack refuses to issue the request, discover right away.
+        logger.debug("CBPeripheral.discoverService: requesting MTU \(requestedMtu) before discovering services...")
+        gattDelegate?.discoverServicesAfterMtuExchange = true
+        if gatt?.requestMtu(requestedMtu) != true {
+            logger.warning("CBPeripheral.discoverService: MTU request could not be issued, discovering services at the default MTU")
+            gattDelegate?.discoverServicesAfterMtuExchange = false
+            gatt?.discoverServices();
+        }
     }
+
+    // Maximum ATT MTU (BLE 5.x, matches the value most cross-platform BLE apps request on
+    // Android); the peripheral answers with what it supports and the stack takes the minimum.
+    private let requestedMtu = 517
 
     @available(*, unavailable)
     open func discoverIncludedServices(_ includedServiceUUIDs: [CBUUID]?, for service: CBService) {}
