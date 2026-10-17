@@ -31,6 +31,16 @@ internal class BleGattCallback: BluetoothGattCallback {
     var centralManagerDelegate: CBCentralManagerDelegate?
     var peripheralDelegate: CBPeripheralDelegate?
 
+    // Whether the link was established. CoreBluetooth reports the loss of an established
+    // link through `didDisconnectPeripheral(error:)` and reserves `didFailToConnect` for
+    // attempts that never connected; Android folds both into one error status.
+    private var isConnected = false
+
+    // Set by `CBPeripheral.discoverServices` around its MTU request. `onMtuChanged` also
+    // fires for exchanges the peripheral initiates (Android 13+), and those must not
+    // restart service discovery on an already discovered link.
+    internal var discoverServicesAfterMtuExchange = false
+
     init(central: CBCentralManager) {
         self.central = central
     }
@@ -40,11 +50,21 @@ internal class BleGattCallback: BluetoothGattCallback {
         if status == BluetoothGatt.GATT_SUCCESS {
             if newState == BluetoothProfile.STATE_CONNECTED {
                 logger.debug("GattCallback.onConnectionStateChange: Connected!")
+                isConnected = true
                 centralManagerDelegate?.centralManagerDidConnect(central, CBPeripheral(gatt, self))
             } else {
                 logger.debug("GattCallback.onConnectionStateChange: Successfully disconnected!")
+                isConnected = false
                 centralManagerDelegate?.centralManagerDidDisconnectPeripheral(central, CBPeripheral(gatt, self), nil)
             }
+        } else if isConnected {
+            // e.g. status 8 (supervision timeout) or 19 (remote terminated): the peripheral
+            // was connected and the link dropped, which CoreBluetooth delivers as a
+            // disconnect carrying an error.
+            logger.debug("GattCallback.onConnectionStateChange: established link lost, status is \(status)")
+            isConnected = false
+            let error = NSError(domain: "skip.bluetooth", code: status, userInfo: [NSLocalizedDescriptionKey: "Peripheral disconnected. Status: \(status)"])
+            centralManagerDelegate?.centralManagerDidDisconnectPeripheral(central, CBPeripheral(gatt, self), error)
         } else {
             logger.debug("GattCallback.onConnectionStateChange: status is \(status)")
             let error = NSError(domain: "skip.bluetooth", code: 1, userInfo: [NSLocalizedDescriptionKey: "Central manager failed to connect with. Status: \(status)"])
@@ -53,6 +73,19 @@ internal class BleGattCallback: BluetoothGattCallback {
     }
 
     // MARK: CBPeripheralDelegate equivalent functions
+    override func onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+        // `CBPeripheral.discoverServices` requests the MTU first and defers discovery to
+        // here. Discover regardless of status: a refused exchange simply keeps MTU 23.
+        if status == BluetoothGatt.GATT_SUCCESS {
+            logger.debug("BleGattCallback.onMtuChanged: MTU is now \(mtu)")
+        } else {
+            logger.warning("BleGattCallback.onMtuChanged: MTU exchange failed with status \(status), MTU stays \(mtu)")
+        }
+        guard discoverServicesAfterMtuExchange else { return }
+        discoverServicesAfterMtuExchange = false
+        gatt.discoverServices()
+    }
+
     override func onServicesDiscovered(gatt: BluetoothGatt, state: Int) {
         guard let peripheral = peripheral else {
             logger.warning("BleGattCallback.onServicesDiscovered: Improper API usage -- peripheral must be set")
